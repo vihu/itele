@@ -1,0 +1,21 @@
+[package]
+description  = "Native IPTV player with Xtream Codes support"
+edition      = "2024"
+license      = "GPL-3.0-or-later"
+name         = "itele"
+publish      = false
+rust-version = "1.93"
+version      = "0.1.0"
+
+[dependencies]
+# libmpv core plus zero-copy frame export (DMA-BUF / IOSurface) into wgpu.
+# The `wgpu` feature tracks wgpu majors: bump together with Slint's
+# `unstable-wgpu-NN`.
+mpv-engine = { version = "0.2.1", features = ["wgpu"] }
+slint      = { version = "1.18.1", features = ["unstable-wgpu-30"] }
+# Same crate Slint re-exports; listed only to enable `wgsl` for
+# `wgpu::util::TextureBlitter`.
+wgpu = { version = "30.0.1", default-features = false, features = ["wgsl"] }
+
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+tikv-jemallocator = "0.6"
