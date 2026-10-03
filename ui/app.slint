@@ -1,0 +1,307 @@
+// The itele window: login, Live TV, and the fullscreen player.
+
+import "fonts/SchibstedGrotesk.ttf";
+import { Theme } from "theme.slint";
+import { Button, ButtonKind } from "atoms.slint";
+import { LoginScreen } from "login.slint";
+import { ChannelItem, GroupItem, LiveTvScreen } from "live-tv.slint";
+import { PlayerScreen, PlayerState } from "player.slint";
+
+export { ChannelItem, GroupItem, PlayerState }
+
+export enum Screen { login, live, player }
+
+export component AppWindow inherits Window {
+    in-out property <Screen> screen: Screen.login;
+
+    // Login and account.
+    in-out property <string> login-server;
+    in-out property <string> login-username;
+    in-out property <string> login-password;
+    in property <string> login-error;
+    in property <bool> login-busy;
+    in property <string> provider-name;
+    in property <string> provider-user;
+    callback login();
+    callback sign-out();
+
+    // Live TV.
+    in property <[GroupItem]> groups;
+    in-out property <int> group-index;
+    in property <[ChannelItem]> channels;
+    in-out property <int> channel-index: -1;
+    in property <string> group-title;
+    in property <string> status;
+    in property <string> avatar;
+    callback group-selected(int);
+    callback channel-selected(int);
+
+    // Playback.
+    in property <image> frame;
+    in property <string> video-note;
+    in property <bool> banner-visible: true;
+    in property <PlayerState> player;
+    out property <length> video-width: screen == Screen.player ? root.width : live.video-width;
+    out property <length> video-height: screen == Screen.player ? root.height : live.video-height;
+    callback watch();
+    callback back();
+    callback zap(int);
+    callback show-banner();
+    callback toggle-pause();
+    callback seek(float);
+    callback go-live();
+    callback toggle-mute();
+    callback change-volume(float);
+    callback cycle-audio();
+    callback cycle-subtitles();
+    callback toggle-fullscreen();
+    callback escape();
+
+    // Moves keyboard focus to the screen that is showing.
+    public function focus-screen() {
+        if (root.screen == Screen.login) {
+            login-screen.focus-first();
+        } else if (root.screen == Screen.live) {
+            live-keys.focus();
+        } else {
+            player-keys.focus();
+        }
+    }
+
+    // Scrolls the channel list to the selected row.
+    public function reveal-current() {
+        live.reveal(root.channel-index);
+    }
+
+    title: "itele";
+    min-width: 1180px;
+    min-height: 720px;
+    preferred-width: 1440px;
+    preferred-height: 900px;
+    background: Theme.bg;
+    default-font-family: "Schibsted Grotesk";
+    default-font-size: Theme.fs-md;
+
+    property <ChannelItem> current: root.channel-index >= 0 && root.channel-index < root.channels.length ? root.channels[root.channel-index] : { name: "" };
+
+    function select(index: int) {
+        if (root.channels.length > 0) {
+            let target = max(0, min(root.channels.length - 1, index));
+            root.channel-selected(target);
+            live.reveal(target);
+        }
+    }
+
+    function select-group(index: int) {
+        if (root.groups.length > 0) {
+            root.group-selected(max(0, min(root.groups.length - 1, index)));
+        }
+    }
+
+    live-keys := FocusScope {
+        visible: root.screen == Screen.live;
+        key-pressed(event) => {
+            if (event.text == Key.UpArrow) {
+                root.select(root.channel-index - 1);
+            } else if (event.text == Key.DownArrow) {
+                root.select(root.channel-index + 1);
+            } else if (event.text == Key.PageUp) {
+                root.select(root.channel-index - 10);
+            } else if (event.text == Key.PageDown) {
+                root.select(root.channel-index + 10);
+            } else if (event.text == Key.Home) {
+                root.select(0);
+            } else if (event.text == Key.End) {
+                root.select(root.channels.length - 1);
+            } else if (event.text == Key.LeftArrow) {
+                root.select-group(root.group-index - 1);
+            } else if (event.text == Key.RightArrow) {
+                root.select-group(root.group-index + 1);
+            } else if (event.text == Key.Return && root.channel-index >= 0) {
+                root.watch();
+            } else {
+                return reject;
+            }
+            accept
+        }
+        live := LiveTvScreen {
+            groups: root.groups;
+            group-index: root.group-index;
+            channels: root.channels;
+            channel-index: root.channel-index;
+            group-title: root.group-title;
+            status: root.status;
+            avatar: root.avatar;
+            frame: root.screen == Screen.live ? root.frame : @image-url("");
+            video-note: root.video-note;
+            group-selected(i) => {
+                root.select-group(i);
+                live-keys.focus();
+            }
+            channel-selected(i) => {
+                root.channel-selected(i);
+                live-keys.focus();
+            }
+            watch => {
+                root.watch();
+            }
+            settings-clicked => {
+                settings.show();
+            }
+        }
+    }
+
+    player-keys := FocusScope {
+        visible: root.screen == Screen.player;
+        key-pressed(event) => {
+            let key = event.text.to-lowercase();
+            if (event.text == Key.UpArrow || event.text == Key.PageUp) {
+                root.zap(-1);
+            } else if (event.text == Key.DownArrow || event.text == Key.PageDown) {
+                root.zap(1);
+            } else if (event.text == Key.LeftArrow) {
+                root.seek(-10);
+            } else if (event.text == Key.RightArrow) {
+                root.seek(10);
+            } else if (key == " " || key == "k") {
+                root.toggle-pause();
+            } else if (key == "l" || event.text == Key.End) {
+                root.go-live();
+            } else if (key == "m") {
+                root.toggle-mute();
+            } else if (key == "+" || key == "=") {
+                root.change-volume(5);
+            } else if (key == "-") {
+                root.change-volume(-5);
+            } else if (key == "a") {
+                root.cycle-audio();
+            } else if (key == "s") {
+                root.cycle-subtitles();
+            } else if (key == "f") {
+                root.toggle-fullscreen();
+            } else if (event.text == Key.Escape) {
+                root.escape();
+            } else if (event.text == Key.Backspace) {
+                root.back();
+            } else {
+                root.show-banner();
+                return reject;
+            }
+            root.show-banner();
+            accept
+        }
+        // Under the banner, so its buttons get their clicks first.
+        TouchArea {
+            mouse-cursor: default;
+            moved => {
+                root.show-banner();
+            }
+            clicked => {
+                root.show-banner();
+            }
+            double-clicked => {
+                root.toggle-fullscreen();
+            }
+        }
+        PlayerScreen {
+            frame: root.screen == Screen.player ? root.frame : @image-url("");
+            channel: root.current;
+            state: root.player;
+            video-note: root.video-note;
+            banner-visible: root.banner-visible;
+            back => {
+                root.back();
+            }
+            toggle-pause => {
+                root.toggle-pause();
+                root.show-banner();
+            }
+            seek(seconds) => {
+                root.seek(seconds);
+                root.show-banner();
+            }
+            go-live => {
+                root.go-live();
+                root.show-banner();
+            }
+            toggle-mute => {
+                root.toggle-mute();
+                root.show-banner();
+            }
+            cycle-audio => {
+                root.cycle-audio();
+                root.show-banner();
+            }
+            cycle-subtitles => {
+                root.cycle-subtitles();
+                root.show-banner();
+            }
+            toggle-fullscreen => {
+                root.toggle-fullscreen();
+            }
+        }
+    }
+
+    login-screen := LoginScreen {
+        visible: root.screen == Screen.login;
+        server <=> root.login-server;
+        username <=> root.login-username;
+        password <=> root.login-password;
+        error: root.login-error;
+        busy: root.login-busy;
+        submit => {
+            root.login();
+        }
+    }
+
+    settings := PopupWindow {
+        x: 84px;
+        y: root.height - 210px;
+        width: 320px;
+        close-policy: close-on-click-outside;
+        Rectangle {
+            background: Theme.surface-2;
+            border-radius: Theme.radius-lg;
+            drop-shadow-blur: 28px;
+            drop-shadow-offset-y: 10px;
+            drop-shadow-color: #00000073;
+            VerticalLayout {
+                padding: 20px;
+                spacing: 6px;
+                Text {
+                    text: root.provider-name;
+                    color: Theme.text;
+                    font-size: Theme.fs-lg;
+                    font-weight: 700;
+                    overflow: elide;
+                }
+                Text {
+                    text: root.provider-user;
+                    color: Theme.text-2;
+                    font-size: Theme.fs-sm;
+                    overflow: elide;
+                }
+                Text {
+                    text: root.status;
+                    color: Theme.text-3;
+                    font-size: Theme.fs-sm;
+                    wrap: word-wrap;
+                }
+                Rectangle {
+                    height: 10px;
+                }
+                HorizontalLayout {
+                    alignment: start;
+                    Button {
+                        kind: ButtonKind.secondary;
+                        text: "Sign out";
+                        clicked => {
+                            settings.close();
+                            root.sign-out();
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

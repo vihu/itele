@@ -8,14 +8,31 @@ rust-version = "1.93"
 version      = "0.1.0"
 
 [dependencies]
+camino           = "1.2"
+directories      = "6"
+jiff             = "0.2"
+# Secret Service on Linux, Keychain on macOS.
+keyring          = "4.2.0"
 # libmpv core plus zero-copy frame export (DMA-BUF / IOSurface) into wgpu.
 # The `wgpu` feature tracks wgpu majors: bump together with Slint's
 # `unstable-wgpu-NN`.
-mpv-engine = { version = "0.2.1", features = ["wgpu"] }
-slint      = { version = "1.18.1", features = ["unstable-wgpu-30"] }
+mpv-engine       = { version = "0.2.1", features = ["wgpu"] }
+percent-encoding = "2.3"
+serde            = { version = "1", features = ["derive"] }
+serde_json       = "1"
+# `unstable-wgpu-30` alone selects no renderer: without a wgpu renderer
+# feature, window creation fails silently inside `run()`.
+slint            = { version = "1.18.1", features = ["renderer-femtovg-wgpu", "unstable-wgpu-30"] }
+ureq             = { version = "3.4.2", default-features = false, features = ["rustls", "gzip"] }
 # Same crate Slint re-exports; listed only to enable `wgsl` for
 # `wgpu::util::TextureBlitter`.
-wgpu = { version = "30.0.1", default-features = false, features = ["wgsl"] }
+wgpu             = { version = "30.0.1", default-features = false, features = ["wgsl"] }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 tikv-jemallocator = "0.6"
+
+[dev-dependencies]
+tempfile = "3.27.0"
+
+[build-dependencies]
+slint-build = "1.18.1"

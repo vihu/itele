@@ -1,0 +1,352 @@
+// Fullscreen player with the channel banner and live controls.
+// Layout: .ai-docs/mockups/04-player.html (without EPG: the timeline shows
+// the cached window instead of the programme).
+
+import { Theme } from "theme.slint";
+import { Button, ButtonKind, ChannelLogo, Hint, LiveMarker, Tag } from "atoms.slint";
+import { ChannelItem } from "live-tv.slint";
+
+export struct PlayerState {
+    paused: bool,
+    muted: bool,
+    volume: int,
+    // Time behind the live edge, empty when live.
+    behind: string,
+    // Playhead within the cached window, 0 to 1.
+    position: float,
+    // Length of the cached window, empty while it is short.
+    window: string,
+    audio: string,
+    subtitles: string,
+    fullscreen: bool,
+}
+
+component ControlButton inherits Rectangle {
+    in property <image> icon;
+    in property <bool> big;
+    in property <bool> active;
+    callback clicked();
+    width: big ? 56px : 44px;
+    height: self.width;
+    border-radius: self.width / 2;
+    background: big ? Theme.text : touch.has-hover ? #ffffff1f : transparent;
+    Image {
+        source: root.icon;
+        width: root.big ? 24px : 22px;
+        height: self.width;
+        colorize: root.big ? Theme.bg : root.active ? Theme.accent : Theme.text;
+    }
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+export component PlayerScreen inherits Rectangle {
+    in property <image> frame;
+    in property <ChannelItem> channel;
+    in property <PlayerState> state;
+    in property <string> video-note;
+    in property <bool> banner-visible;
+    callback back();
+    callback toggle-pause();
+    callback seek(float);
+    callback go-live();
+    callback toggle-mute();
+    callback cycle-audio();
+    callback cycle-subtitles();
+    callback toggle-fullscreen();
+
+    background: #000;
+    Image {
+        width: 100%;
+        height: 100%;
+        source: root.frame;
+        image-fit: fill;
+    }
+    if root.video-note != "": Text {
+        text: root.video-note;
+        color: Theme.text-2;
+        font-size: Theme.fs-lg;
+        font-weight: 600;
+    }
+
+    // Top bar.
+    Rectangle {
+        y: 0;
+        height: 120px;
+        opacity: root.banner-visible ? 1 : 0;
+        animate opacity { duration: 200ms; }
+        background: @linear-gradient(180deg, #08090cbf 0%, #08090c00 100%);
+        HorizontalLayout {
+            padding: 22px;
+            padding-left: 32px;
+            alignment: start;
+            VerticalLayout {
+                alignment: start;
+                Button {
+                    kind: ButtonKind.secondary;
+                    text: "Live TV";
+                    icon: @image-url("icons/arrow-left.svg");
+                    has-icon: true;
+                    clicked => {
+                        root.back();
+                    }
+                }
+            }
+        }
+    }
+
+    // Channel banner and controls.
+    Rectangle {
+        y: parent.height - self.height;
+        height: 330px;
+        opacity: root.banner-visible ? 1 : 0;
+        animate opacity { duration: 200ms; }
+        background: @linear-gradient(0deg, #08090cf5 0%, #08090cd9 50%, #08090c00 100%);
+        VerticalLayout {
+            padding-left: 40px;
+            padding-right: 40px;
+            padding-bottom: 26px;
+            spacing: 10px;
+            alignment: end;
+            HorizontalLayout {
+                spacing: 14px;
+                alignment: start;
+                VerticalLayout {
+                    alignment: center;
+                    ChannelLogo {
+                        width: 72px;
+                        height: 46px;
+                        short: root.channel.short;
+                        tint: root.channel.tint;
+                        logo: root.channel.logo;
+                        has-logo: root.channel.has-logo;
+                    }
+                }
+                Text {
+                    text: root.channel.number;
+                    color: Theme.text-2;
+                    font-size: Theme.fs-xl;
+                    font-weight: 700;
+                    vertical-alignment: center;
+                }
+                VerticalLayout {
+                    alignment: center;
+                    LiveMarker { }
+                }
+                if root.channel.archive != "": VerticalLayout {
+                    alignment: center;
+                    Tag {
+                        text: root.channel.archive;
+                        on-image: true;
+                    }
+                }
+                if root.state.audio != "": VerticalLayout {
+                    alignment: center;
+                    Tag {
+                        text: root.state.audio;
+                        on-image: true;
+                    }
+                }
+                if root.state.subtitles != "": VerticalLayout {
+                    alignment: center;
+                    Tag {
+                        text: "Subtitles: " + root.state.subtitles;
+                        on-image: true;
+                    }
+                }
+            }
+            Text {
+                text: root.channel.name;
+                color: Theme.text;
+                font-size: 44px;
+                font-weight: 800;
+                overflow: elide;
+            }
+            Text {
+                text: root.channel.group;
+                color: Theme.text-2;
+                font-size: Theme.fs-md;
+                font-weight: 500;
+            }
+            Rectangle {
+                height: 4px;
+            }
+
+            // Timeline over the cached window; the right end is live.
+            HorizontalLayout {
+                spacing: 16px;
+                Text {
+                    min-width: 48px;
+                    text: root.state.window == "" ? "" : "-" + root.state.window;
+                    color: Theme.text-2;
+                    font-size: Theme.fs-sm;
+                    font-weight: 600;
+                    vertical-alignment: center;
+                }
+                Rectangle {
+                    horizontal-stretch: 1;
+                    height: 16px;
+                    Rectangle {
+                        y: 5px;
+                        height: 6px;
+                        border-radius: 3px;
+                        background: #ffffff47;
+                    }
+                    Rectangle {
+                        x: 0;
+                        y: 5px;
+                        width: parent.width * root.state.position;
+                        height: 6px;
+                        border-radius: 3px;
+                        background: Theme.accent;
+                    }
+                    Rectangle {
+                        x: parent.width * root.state.position - 8px;
+                        y: 0;
+                        width: 16px;
+                        height: 16px;
+                        border-radius: 8px;
+                        background: Theme.text;
+                        drop-shadow-blur: 6px;
+                        drop-shadow-offset-y: 2px;
+                        drop-shadow-color: #00000080;
+                    }
+                }
+                Text {
+                    min-width: 48px;
+                    text: "Live";
+                    color: root.state.behind == "" ? Theme.accent : Theme.text-2;
+                    font-size: Theme.fs-sm;
+                    font-weight: 700;
+                    horizontal-alignment: right;
+                    vertical-alignment: center;
+                }
+            }
+
+            HorizontalLayout {
+                spacing: 8px;
+                ControlButton {
+                    icon: @image-url("icons/back.svg");
+                    clicked => {
+                        root.seek(-10);
+                    }
+                }
+                ControlButton {
+                    big: true;
+                    icon: root.state.paused ? @image-url("icons/play.svg") : @image-url("icons/pause.svg");
+                    clicked => {
+                        root.toggle-pause();
+                    }
+                }
+                ControlButton {
+                    icon: @image-url("icons/forward.svg");
+                    clicked => {
+                        root.seek(10);
+                    }
+                }
+                if root.state.behind != "": HorizontalLayout {
+                    horizontal-stretch: 0;
+                    padding-left: 14px;
+                    spacing: 14px;
+                    Text {
+                        horizontal-stretch: 0;
+                        text: root.state.behind + " behind live";
+                        color: Theme.text-3;
+                        font-size: Theme.fs-sm;
+                        font-weight: 600;
+                        vertical-alignment: center;
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        Rectangle {
+                            width: go-live.preferred-width;
+                            height: 34px;
+                            border-radius: 17px;
+                            background: go-live-touch.has-hover ? #f5a52438 : Theme.accent-soft;
+                            go-live := HorizontalLayout {
+                                padding-left: 14px;
+                                padding-right: 14px;
+                                spacing: 8px;
+                                VerticalLayout {
+                                    alignment: center;
+                                    Rectangle {
+                                        width: 7px;
+                                        height: 7px;
+                                        border-radius: 3.5px;
+                                        background: Theme.accent;
+                                    }
+                                }
+                                Text {
+                                    text: "Go live";
+                                    color: Theme.accent;
+                                    font-size: Theme.fs-sm;
+                                    font-weight: 700;
+                                    vertical-alignment: center;
+                                }
+                            }
+                            go-live-touch := TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => {
+                                    root.go-live();
+                                }
+                            }
+                        }
+                    }
+                }
+                Rectangle {
+                    horizontal-stretch: 1;
+                }
+                Hint {
+                    keys: ["↑", "↓"];
+                    label: "Channel";
+                }
+                Hint {
+                    keys: ["Space"];
+                    label: root.state.paused ? "Play" : "Pause";
+                }
+                Rectangle {
+                    width: 10px;
+                }
+                ControlButton {
+                    icon: @image-url("icons/audio.svg");
+                    clicked => {
+                        root.cycle-audio();
+                    }
+                }
+                ControlButton {
+                    icon: @image-url("icons/captions.svg");
+                    active: root.state.subtitles != "";
+                    clicked => {
+                        root.cycle-subtitles();
+                    }
+                }
+                ControlButton {
+                    icon: root.state.muted ? @image-url("icons/mute.svg") : @image-url("icons/volume.svg");
+                    active: root.state.muted;
+                    clicked => {
+                        root.toggle-mute();
+                    }
+                }
+                Text {
+                    text: root.state.muted ? "Muted" : root.state.volume + "%";
+                    color: Theme.text-2;
+                    font-size: Theme.fs-sm;
+                    font-weight: 600;
+                    vertical-alignment: center;
+                    min-width: 44px;
+                }
+                ControlButton {
+                    icon: @image-url("icons/maximize.svg");
+                    active: root.state.fullscreen;
+                    clicked => {
+                        root.toggle-fullscreen();
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,147 @@
+// First run: add an Xtream provider.
+
+import { Theme } from "theme.slint";
+import { Button, ButtonKind } from "atoms.slint";
+
+component Field inherits VerticalLayout {
+    in property <string> label;
+    in property <string> placeholder;
+    in property <InputType> input-type: InputType.text;
+    in-out property <string> text;
+    callback accepted();
+    forward-focus: input;
+    spacing: 6px;
+    Text {
+        text: root.label;
+        color: Theme.text-2;
+        font-size: Theme.fs-sm;
+        font-weight: 600;
+    }
+    Rectangle {
+        height: 44px;
+        border-radius: Theme.radius-md;
+        background: Theme.surface-2;
+        border-width: input.has-focus ? 2px : 0px;
+        border-color: Theme.accent;
+        if root.text == "": Text {
+            x: 14px;
+            height: parent.height;
+            text: root.placeholder;
+            color: Theme.text-3;
+            font-size: Theme.fs-md;
+            vertical-alignment: center;
+        }
+        input := TextInput {
+            x: 14px;
+            width: parent.width - 28px;
+            height: parent.height;
+            text <=> root.text;
+            input-type: root.input-type;
+            color: Theme.text;
+            font-size: Theme.fs-md;
+            vertical-alignment: center;
+            selection-background-color: Theme.accent;
+            selection-foreground-color: Theme.accent-ink;
+            accepted => {
+                root.accepted();
+            }
+        }
+    }
+}
+
+export component LoginScreen inherits Rectangle {
+    in-out property <string> server;
+    in-out property <string> username;
+    in-out property <string> password;
+    in property <string> error;
+    in property <bool> busy;
+    callback submit();
+
+    public function focus-first() {
+        server-field.focus();
+    }
+
+    background: Theme.bg;
+    VerticalLayout {
+        alignment: center;
+        HorizontalLayout {
+            alignment: center;
+            VerticalLayout {
+                width: 420px;
+                spacing: 18px;
+                HorizontalLayout {
+                    alignment: start;
+                    Text {
+                        text: "itele";
+                        color: Theme.text;
+                        font-size: Theme.fs-4xl;
+                        font-weight: 800;
+                    }
+                    Text {
+                        text: ".";
+                        color: Theme.accent;
+                        font-size: Theme.fs-4xl;
+                        font-weight: 800;
+                    }
+                }
+                Text {
+                    text: "Add your IPTV provider. Use the Xtream Codes details your provider sent you.";
+                    color: Theme.text-2;
+                    font-size: Theme.fs-md;
+                    wrap: word-wrap;
+                }
+                Rectangle {
+                    height: 6px;
+                }
+                server-field := Field {
+                    label: "Server";
+                    placeholder: "http://provider.example:8080";
+                    text <=> root.server;
+                    accepted => {
+                        user-field.focus();
+                    }
+                }
+                user-field := Field {
+                    label: "Username";
+                    text <=> root.username;
+                    accepted => {
+                        password-field.focus();
+                    }
+                }
+                password-field := Field {
+                    label: "Password";
+                    input-type: InputType.password;
+                    text <=> root.password;
+                    accepted => {
+                        if (!root.busy) {
+                            root.submit();
+                        }
+                    }
+                }
+                if root.error != "": Text {
+                    text: root.error;
+                    color: Theme.danger;
+                    font-size: Theme.fs-sm;
+                    wrap: word-wrap;
+                }
+                HorizontalLayout {
+                    alignment: start;
+                    Button {
+                        kind: ButtonKind.primary;
+                        text: root.busy ? "Signing in…" : "Sign in";
+                        enabled: !root.busy && root.server != "" && root.username != "" && root.password != "";
+                        clicked => {
+                            root.submit();
+                        }
+                    }
+                }
+                Text {
+                    text: "The password is kept in your system keychain, never in a file.";
+                    color: Theme.text-3;
+                    font-size: Theme.fs-sm;
+                    wrap: word-wrap;
+                }
+            }
+        }
+    }
+}
