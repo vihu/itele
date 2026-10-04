@@ -3,8 +3,9 @@
 
 import { ListView } from "std-widgets.slint";
 import { Theme } from "theme.slint";
-import { Button, ButtonKind, ChannelLogo, Hint, LiveMarker, Tag } from "atoms.slint";
+import { Hint } from "atoms.slint";
 import { ChannelItem, GroupItem, ProgrammeInfo, UpcomingItem } from "models.slint";
+import { ChannelPreview } from "preview.slint";
 import { ChannelRow } from "rows.slint";
 import { GroupsColumn } from "groups.slint";
 
@@ -21,13 +22,15 @@ export component LiveTvScreen inherits Rectangle {
     in property <string> video-note;
     in property <ProgrammeInfo> programme;
     in property <[UpcomingItem]> upcoming;
-    out property <length> video-width: video.width;
-    out property <length> video-height: video.height;
+    out property <length> video-width: preview.video-width;
+    out property <length> video-height: preview.video-height;
     callback group-selected(int);
     callback channel-selected(int);
     callback watch();
     callback navigate(int);
     callback next-provider();
+    // F or a heart: the channel at a row joins the favorites, or leaves.
+    callback favorite(int);
     // Rows `first` to `first + count` are on screen, for lazy logos.
     callback rows-visible(int, int);
 
@@ -89,6 +92,8 @@ export component LiveTvScreen inherits Rectangle {
                 root.select-group(root.group-index + 1);
             } else if (event.text == Key.Return && root.channel-index >= 0) {
                 root.watch();
+            } else if (key == "f" && root.channel-index >= 0) {
+                root.favorite(root.channel-index);
             } else if (key == "g") {
                 root.navigate(2);
             } else if (event.text == "/" || (event.modifiers.control && key == "k")) {
@@ -154,165 +159,24 @@ export component LiveTvScreen inherits Rectangle {
                                     root.channel-selected(i);
                                     root.watch();
                                 }
+                                heart-clicked => {
+                                    root.favorite(i);
+                                }
                             }
                         }
                     }
                 }
-                // Preview.
-                Rectangle {
-                    width: 460px;
-                    background: Theme.surface-1;
-                    VerticalLayout {
-                        padding: 24px;
-                        spacing: 0px;
-                        alignment: start;
-                        video := Rectangle {
-                            height: self.width * 9 / 16;
-                            border-radius: Theme.radius-md;
-                            clip: true;
-                            background: #000;
-                            Image {
-                                width: 100%;
-                                height: 100%;
-                                source: root.frame;
-                                image-fit: fill;
-                            }
-                            if root.video-note != "": Text {
-                                text: root.video-note;
-                                color: Theme.text-2;
-                                font-size: Theme.fs-sm;
-                                font-weight: 600;
-                            }
-                            if root.current.name != "": Rectangle {
-                                x: 12px;
-                                y: 12px;
-                                width: marker.preferred-width + 16px;
-                                height: 22px;
-                                border-radius: 5px;
-                                background: Theme.on-image;
-                                marker := LiveMarker {
-                                    x: 8px;
-                                    height: parent.height;
-                                }
-                            }
-                        }
-                        Rectangle {
-                            height: 22px;
-                        }
-                        Text {
-                            text: root.programme.title != "" ? root.programme.title : root.current.name;
-                            color: Theme.text;
-                            font-size: Theme.fs-2xl;
-                            font-weight: 800;
-                            wrap: word-wrap;
-                        }
-                        Rectangle {
-                            height: 6px;
-                        }
-                        Text {
-                            text: root.current.name == "" ? ""
-                                : root.programme.title != "" ? root.current.name + "  ·  " + root.programme.time
-                                : root.current.number + "  ·  " + root.current.group;
-                            color: Theme.text-2;
-                            font-size: Theme.fs-md;
-                            font-weight: 500;
-                            overflow: elide;
-                        }
-                        if root.programme.title != "": HorizontalLayout {
-                            padding-top: 14px;
-                            spacing: 12px;
-                            VerticalLayout {
-                                alignment: center;
-                                horizontal-stretch: 1;
-                                Rectangle {
-                                    height: 4px;
-                                    border-radius: 2px;
-                                    background: #ffffff29;
-                                    Rectangle {
-                                        x: 0;
-                                        width: parent.width * max(0, root.programme.progress);
-                                        border-radius: 2px;
-                                        background: Theme.accent;
-                                    }
-                                }
-                            }
-                            Text {
-                                text: root.programme.left;
-                                color: Theme.text-3;
-                                font-size: Theme.fs-sm;
-                            }
-                        }
-                        if root.programme.description != "": Text {
-                            text: root.programme.description;
-                            color: Theme.text-2;
-                            font-size: Theme.fs-md;
-                            wrap: word-wrap;
-                            overflow: elide;
-                            max-height: 88px;
-                        }
-                        Rectangle {
-                            height: 14px;
-                        }
-                        HorizontalLayout {
-                            alignment: start;
-                            spacing: 6px;
-                            if root.current.archive != "": Tag {
-                                text: root.current.archive;
-                            }
-                        }
-                        Rectangle {
-                            height: 20px;
-                        }
-                        HorizontalLayout {
-                            alignment: start;
-                            spacing: 10px;
-                            if root.current.name != "": Button {
-                                kind: ButtonKind.primary;
-                                text: "Watch";
-                                hint: "Enter";
-                                icon: @image-url("icons/play.svg");
-                                has-icon: true;
-                                clicked => {
-                                    root.watch();
-                                }
-                            }
-                        }
-                        if root.upcoming.length > 0: VerticalLayout {
-                            padding-top: 24px;
-                            spacing: 0px;
-                            Text {
-                                text: "Up next";
-                                color: Theme.text-3;
-                                font-size: Theme.fs-sm;
-                                font-weight: 700;
-                            }
-                            for next in root.upcoming: VerticalLayout {
-                                padding-top: 8px;
-                                spacing: 8px;
-                                Rectangle {
-                                    height: 1px;
-                                    background: Theme.line;
-                                }
-                                HorizontalLayout {
-                                    spacing: 14px;
-                                    Text {
-                                        // Room for "12:30 PM".
-                                        width: 66px;
-                                        text: next.time;
-                                        color: Theme.text-3;
-                                        font-size: Theme.fs-sm;
-                                        font-weight: 600;
-                                    }
-                                    Text {
-                                        text: next.title;
-                                        color: Theme.text;
-                                        font-size: Theme.fs-sm;
-                                        overflow: elide;
-                                        horizontal-stretch: 1;
-                                    }
-                                }
-                            }
-                        }
+                preview := ChannelPreview {
+                    frame: root.frame;
+                    video-note: root.video-note;
+                    current: root.current;
+                    programme: root.programme;
+                    upcoming: root.upcoming;
+                    watch => {
+                        root.watch();
+                    }
+                    favorite => {
+                        root.favorite(root.channel-index);
                     }
                 }
             }
@@ -343,6 +207,10 @@ export component LiveTvScreen inherits Rectangle {
                     Hint {
                         keys: ["Enter"];
                         label: "Watch";
+                    }
+                    Hint {
+                        keys: ["F"];
+                        label: "Favorite";
                     }
                     Hint {
                         keys: ["P"];

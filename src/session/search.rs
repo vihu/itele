@@ -372,7 +372,12 @@ impl Session {
             return false;
         };
         self.select_view(index as i32);
-        let row = self.state.borrow().catalog.row_of(0, provider, stream);
+        let row = {
+            let state = self.state.borrow();
+            state
+                .catalog
+                .row_of(state.catalog.first_group(), provider, stream)
+        };
         let Some(row) = row else {
             return false;
         };

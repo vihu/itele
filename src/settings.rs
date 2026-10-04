@@ -57,6 +57,8 @@ pub enum Place {
     Movies,
     /// Series.
     Series,
+    /// Favorites.
+    Favorites,
 }
 
 /// How often something is downloaded again.

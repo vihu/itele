@@ -19,7 +19,14 @@ impl Session {
         let Some(app) = self.app.upgrade() else {
             return;
         };
-        if app.get_channel_index() < 0 {
+        let playable = {
+            let state = self.state.borrow();
+            usize::try_from(app.get_channel_index())
+                .ok()
+                .and_then(|row| state.catalog.stream(state.group, row))
+                .is_some()
+        };
+        if !playable {
             return;
         }
         self.select_timer.stop();
@@ -30,10 +37,15 @@ impl Session {
     /// Shows the player with its banner and starts reading mpv.
     pub(super) fn enter_player(&self) {
         if let Some(app) = self.app.upgrade() {
-            let label = if self.timeline() == Timeline::Title {
-                "Back"
-            } else {
-                "Live TV"
+            match app.get_screen() {
+                Screen::Favorites => self.live_origin.set(Screen::Favorites),
+                Screen::Player => {}
+                _ => self.live_origin.set(Screen::Live),
+            }
+            let label = match (self.timeline(), self.live_origin.get()) {
+                (Timeline::Title, _) => "Back",
+                (_, Screen::Favorites) => "Favorites",
+                _ => "Live TV",
             };
             app.set_player_back(label.into());
         }
@@ -65,7 +77,7 @@ impl Session {
             self.show(Screen::Details);
             self.refresh_page_history();
         } else {
-            self.show(Screen::Live);
+            self.show(self.live_origin.get());
             app.invoke_reveal_current();
         }
     }
@@ -196,14 +208,18 @@ impl Session {
         if self.timeline() == Timeline::Title {
             return;
         }
-        let len = {
+        // The next row that plays: favorites gone from their provider are
+        // skipped.
+        let row = {
             let state = self.state.borrow();
-            state.catalog.group_len(state.group)
+            let len = state.catalog.group_len(state.group) as i32;
+            (1..=len)
+                .map(|step| (app.get_channel_index() + delta * step).rem_euclid(len))
+                .find(|&row| state.catalog.stream(state.group, row as usize).is_some())
         };
-        if len == 0 {
+        let Some(row) = row else {
             return;
-        }
-        let row = (app.get_channel_index() + delta).rem_euclid(len as i32);
+        };
         app.set_channel_index(row);
         self.refresh_programme();
         self.play_selected();

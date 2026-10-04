@@ -218,6 +218,7 @@ impl Session {
             Screen::Guide => Place::Guide,
             Screen::Movies => Place::Movies,
             Screen::Series => Place::Series,
+            Screen::Favorites => Place::Favorites,
             _ => return,
         };
         let mut s = self.settings.borrow_mut();
@@ -241,6 +242,7 @@ impl Session {
                 Place::Guide => self.navigate(2),
                 Place::Movies => self.navigate(3),
                 Place::Series => self.navigate(4),
+                Place::Favorites => self.navigate(7),
             }
         }
     }

@@ -5,6 +5,8 @@ export struct GroupItem {
     count: string,
     // The group's provider, shown when every provider is listed.
     provider: string,
+    // The Favorites group, with a heart.
+    favorites: bool,
 }
 
 export struct ChannelItem {
@@ -14,6 +16,9 @@ export struct ChannelItem {
     // The channel's provider and its hue, when rows from several show.
     provider: string,
     hue: color,
+    favorite: bool,
+    // A favorite its provider no longer lists: dimmed, cannot play.
+    gone: bool,
     short: string,
     tint: color,
     logo: image,
@@ -95,6 +100,8 @@ export struct ProviderItem {
     // Initials, and for example "Until 12 Jan 2027", for the account menu.
     avatar: string,
     meta: string,
+    // Its hue, on its tags.
+    hue: color,
 }
 
 // A search result: a channel, a programme, a section heading, or a movie

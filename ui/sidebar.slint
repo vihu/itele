@@ -14,6 +14,8 @@ export global Shell {
     in property <string> avatar;
     in property <string> provider-name;
     in property <string> provider-meta;
+    // Favorite channels, on the Favorites item.
+    in property <int> favorite-count;
     callback toggle-sidebar();
 }
 
@@ -21,6 +23,8 @@ component SidebarItem inherits Rectangle {
     in property <image> icon;
     in property <string> text;
     in property <bool> active;
+    // A count on the right when expanded; empty for none.
+    in property <string> badge;
     callback clicked();
     height: 44px;
     border-radius: Theme.radius-md;
@@ -47,6 +51,27 @@ component SidebarItem inherits Rectangle {
             vertical-alignment: center;
             horizontal-stretch: 1;
             overflow: elide;
+        }
+        if root.badge != "": VerticalLayout {
+            alignment: center;
+            Rectangle {
+                height: 20px;
+                min-width: 22px;
+                border-radius: 10px;
+                background: root.active ? Theme.accent-soft : Theme.surface-3;
+                HorizontalLayout {
+                    padding-left: 6px;
+                    padding-right: 6px;
+                    Text {
+                        text: root.badge;
+                        color: root.active ? Theme.accent : Theme.text-2;
+                        font-size: 11px;
+                        font-weight: 700;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+            }
         }
     }
     if !Shell.sidebar-expanded: Image {
@@ -143,8 +168,8 @@ component MenuRow inherits Rectangle {
 }
 
 export component Sidebar inherits Rectangle {
-    // The highlighted place: 0 home, 1 live TV, 2 guide, 3 movies, 4
-    // series; 6 (Settings) lights the account chip.
+    // The highlighted place: 0 home, 1 live TV, 7 favorites, 2 guide, 3
+    // movies, 4 series; 6 (Settings) lights the account chip.
     in property <int> active: 1;
     in property <[ProviderItem]> providers;
     // The viewed provider; -1 is every provider.
@@ -249,6 +274,7 @@ export component Sidebar inherits Rectangle {
         for item in [
             { id: 0, icon: @image-url("icons/home.svg"), text: "Home" },
             { id: 1, icon: @image-url("icons/tv.svg"), text: "Live TV" },
+            { id: 7, icon: @image-url("icons/heart.svg"), text: "Favorites" },
             { id: 2, icon: @image-url("icons/guide.svg"), text: "Guide" },
             { id: 3, icon: @image-url("icons/film.svg"), text: "Movies" },
             { id: 4, icon: @image-url("icons/series.svg"), text: "Series" },
@@ -256,6 +282,7 @@ export component Sidebar inherits Rectangle {
             icon: item.icon;
             text: item.text;
             active: item.id == root.active;
+            badge: item.id == 7 && Shell.favorite-count > 0 ? "\{Shell.favorite-count}" : "";
             clicked => {
                 root.navigate(item.id);
             }

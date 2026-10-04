@@ -11,9 +11,12 @@ export component Button inherits Rectangle {
     in property <string> hint;
     in property <ButtonKind> kind: ButtonKind.secondary;
     in property <bool> enabled: true;
+    // Switched on, for example a favorite: the accent ink.
+    in property <bool> on;
     callback clicked();
 
     property <color> ink: kind == ButtonKind.primary ? Theme.accent-ink
+        : on ? Theme.accent
         : kind == ButtonKind.danger ? Theme.danger
         : kind == ButtonKind.ghost && !touch.has-hover ? Theme.text-2 : Theme.text;
 

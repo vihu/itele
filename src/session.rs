@@ -10,6 +10,7 @@ mod about;
 mod browse;
 mod catchup;
 mod details;
+mod favorites;
 mod grid;
 mod guide;
 mod navigate;
@@ -31,6 +32,7 @@ use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
 
 use itele::epg::{Programme, Store};
+use itele::favorites::Favorites;
 use itele::history::{Entry, History};
 use itele::provider::{Library, Paths, Provider};
 use itele::settings::Settings;
@@ -76,6 +78,10 @@ pub struct Session {
     /// Read side of the guide store; imports write through their own
     /// connection on a worker thread.
     guide: RefCell<Option<Store>>,
+    /// Favorites; `None` when they cannot be opened.
+    favorites: RefCell<Option<Favorites>>,
+    /// Where the player goes back to for a channel: Live TV or Favorites.
+    live_origin: Cell<Screen>,
     /// Watch history; `None` when it cannot be opened, which only loses
     /// resume.
     history: Option<History>,
@@ -105,6 +111,8 @@ struct State {
     row_logos: Vec<String>,
     /// Where each row finds its programmes.
     row_guides: Vec<GuideKey>,
+    /// The group Live TV showed before the Favorites screen took it.
+    live_group: Option<usize>,
     /// Days of catch-up each row keeps; 0 for none.
     row_archive: Vec<u32>,
     /// Rows the channel list last reported on screen.
@@ -185,6 +193,9 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
         on_ui_thread(move |s| s.art_ready(url, size, picture));
     });
     let guide = Store::open(&paths.guide_path()).ok();
+    let favorites = Favorites::open(&paths.favorites_path())
+        .inspect_err(|e| eprintln!("favorites: {e}"))
+        .ok();
     let history = History::open(&paths.history_path())
         .inspect_err(|e| eprintln!("watch history: {e}"))
         .ok();
@@ -201,6 +212,8 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
         logos: RefCell::new(logos),
         art: RefCell::new(art),
         guide: RefCell::new(guide),
+        favorites: RefCell::new(favorites),
+        live_origin: Cell::new(Screen::Live),
         history,
         saved_at: Cell::new(Instant::now()),
         title_length: Cell::new(0.0),
@@ -245,6 +258,9 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
         });
     });
     app.on_navigate(|i| with_session(|s| s.navigate(i)));
+    app.on_toggle_favorite(|row| with_session(|s| s.toggle_favorite(row)));
+    app.on_move_favorite(|delta| with_session(|s| s.move_favorite(delta)));
+    app.on_filter_favorites(|i| with_session(|s| s.filter_favorites(i)));
     app.on_guide_rows_visible(|first, count| with_session(|s| s.grid_rows_visible(first, count)));
     app.on_guide_move(|dx, dy| with_session(|s| s.grid_move(dx, dy)));
     app.on_guide_page(|direction| with_session(|s| s.grid_page(direction)));
@@ -286,6 +302,7 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
         with_session(|s| tracks::select(&s.engine, track_kind(kind), i64::from(id)));
     });
 
+    session.load_favorites();
     session.open_saved();
     session
         .guide_timer

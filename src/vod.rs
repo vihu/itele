@@ -184,6 +184,7 @@ impl<T: Tile> Shelves for Catalog<T> {
                 } else {
                     SharedString::new()
                 },
+                favorites: false,
             })
             .collect()
     }

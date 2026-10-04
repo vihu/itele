@@ -16,10 +16,11 @@ import { Browse } from "browse.slint";
 import { Fact, GuideStatus, ProviderDetails, SettingKey, SettingValues, SettingsData, SettingsScreen } from "settings.slint";
 import { PosterItem, VodScreen } from "vod.slint";
 import { DetailsScreen, EpisodeItem, SeasonItem, TitleDetails } from "details.slint";
+import { FavoritesScreen } from "favorites.slint";
 
 export { Shell, SearchData, ChannelItem, Fact, GroupItem, GuideStatus, SettingKey, SettingValues, SettingsData, ProviderItem, SearchItem, GuideCell, GuideDetails, GuideRow, GuideTick, EpisodeItem, InfoLine, InfoPair, PlayerState, PosterItem, ProgrammeInfo, ProviderDetails, SeasonItem, TitleDetails, TrackItem, UpcomingItem }
 
-export enum Screen { login, live, guide, search, movies, series, details, settings, player }
+export enum Screen { login, live, favorites, guide, search, movies, series, details, settings, player }
 
 
 export component AppWindow inherits Window {
@@ -54,6 +55,13 @@ export component AppWindow inherits Window {
     callback group-selected(int);
     callback channel-selected(int);
     callback rows-visible(int, int);
+
+    // Favorites: F or a heart toggles the channel at a row of the listed
+    // group; the Favorites screen reorders them and filters by provider.
+    in property <int> favorites-filter: -1;
+    callback toggle-favorite(int);
+    callback move-favorite(int);
+    callback filter-favorites(int);
 
     // Guide.
     in property <[GuideRow]> guide-rows;
@@ -125,10 +133,10 @@ export component AppWindow inherits Window {
     in property <int> details-season-index;
     in property <[EpisodeItem]> details-episodes;
     in-out property <int> details-episode-index;
-    callback details-play();
-    callback details-restart();
-    callback details-back();
-    callback details-season-selected(int);
+    callback details-play <=> details-screen.play;
+    callback details-restart <=> details-screen.restart;
+    callback details-back <=> details-screen.back;
+    callback details-season-selected <=> details-screen.season-selected;
 
     // Scrolls a series' page to the selected season and episode.
     public function reveal-episode() {
@@ -146,28 +154,28 @@ export component AppWindow inherits Window {
     in property <[InfoLine]> info;
     // The label of the player's back button, for example "Live TV".
     in property <string> player-back: "Live TV";
-    out property <length> video-width: screen == Screen.player ? root.width : screen == Screen.guide ? guide.video-width : live.video-width;
-    out property <length> video-height: screen == Screen.player ? root.height : screen == Screen.guide ? guide.video-height : live.video-height;
+    out property <length> video-width: screen == Screen.player ? root.width : screen == Screen.guide ? guide.video-width : screen == Screen.favorites ? favorites-screen.video-width : live.video-width;
+    out property <length> video-height: screen == Screen.player ? root.height : screen == Screen.guide ? guide.video-height : screen == Screen.favorites ? favorites-screen.video-height : live.video-height;
     callback watch();
-    callback back();
-    callback zap(int);
-    callback show-banner();
-    callback toggle-pause();
-    callback seek(float);
-    callback seek-to(float);
-    callback go-live();
-    callback toggle-mute();
-    callback change-volume(float);
-    callback set-volume(float);
+    callback back <=> player-screen.back;
+    callback zap <=> player-screen.zap;
+    callback show-banner <=> player-screen.show-banner;
+    callback toggle-pause <=> player-screen.toggle-pause;
+    callback seek <=> player-screen.seek;
+    callback seek-to <=> player-screen.seek-to;
+    callback go-live <=> player-screen.go-live;
+    callback toggle-mute <=> player-screen.toggle-mute;
+    callback change-volume <=> player-screen.change-volume;
+    callback set-volume <=> player-screen.set-volume;
     // The player's audio or subtitle menu: 0 audio, 1 subtitles.
     in property <[TrackItem]> track-items;
     in property <int> tracks-kind;
     in-out property <bool> tracks-open;
     in-out property <int> tracks-index;
-    callback open-tracks(int);
-    callback choose-track(int, int);
-    callback toggle-fullscreen();
-    callback escape();
+    callback open-tracks <=> player-screen.open-tracks;
+    callback choose-track <=> player-screen.choose-track;
+    callback toggle-fullscreen <=> player-screen.toggle-fullscreen;
+    callback escape <=> player-screen.escape;
 
     // Moves keyboard focus to the screen that is showing.
     public function focus-screen() {
@@ -175,6 +183,8 @@ export component AppWindow inherits Window {
             login-screen.focus-first();
         } else if (root.screen == Screen.live) {
             live.focus-keys();
+        } else if (root.screen == Screen.favorites) {
+            favorites-screen.focus-keys();
         } else if (root.screen == Screen.guide) {
             guide.focus-keys();
         } else if (root.screen == Screen.search) {
@@ -192,7 +202,11 @@ export component AppWindow inherits Window {
 
     // Scrolls the channel list to the selected row.
     public function reveal-current() {
-        live.reveal(root.channel-index);
+        if (root.screen == Screen.favorites) {
+            favorites-screen.reveal(root.channel-index);
+        } else {
+            live.reveal(root.channel-index);
+        }
     }
 
     title: "itele";
@@ -206,7 +220,7 @@ export component AppWindow inherits Window {
 
     // The screens beside the sidebar and under the top bar.
     property <bool> browsing: root.screen != Screen.login && root.screen != Screen.player;
-    property <int> place: root.screen == Screen.live ? 1 : root.screen == Screen.guide ? 2 : root.screen == Screen.movies ? 3 : root.screen == Screen.series ? 4 : root.screen == Screen.details ? root.details-rail : root.screen == Screen.settings ? 6 : -1;
+    property <int> place: root.screen == Screen.live ? 1 : root.screen == Screen.favorites ? 7 : root.screen == Screen.guide ? 2 : root.screen == Screen.movies ? 3 : root.screen == Screen.series ? 4 : root.screen == Screen.details ? root.details-rail : root.screen == Screen.settings ? 6 : -1;
 
     property <ChannelItem> current: root.channel-index >= 0 && root.channel-index < root.channels.length ? root.channels[root.channel-index] : { name: "" };
 
@@ -285,6 +299,43 @@ export component AppWindow inherits Window {
                 rows-visible(first, count) => {
                     root.rows-visible(first, count);
                 }
+                favorite(row) => {
+                    root.toggle-favorite(row);
+                }
+            }
+
+            favorites-screen := FavoritesScreen {
+                visible: root.screen == Screen.favorites;
+                channels: root.channels;
+                channel-index: root.channel-index;
+                count: Shell.favorite-count;
+                providers: root.providers;
+                filter: root.favorites-filter;
+                frame: root.screen == Screen.favorites ? root.frame : @image-url("");
+                video-note: root.video-note;
+                programme: root.programme;
+                upcoming: root.upcoming;
+                channel-selected(i) => {
+                    root.channel-selected(i);
+                }
+                watch => {
+                    root.watch();
+                }
+                favorite(row) => {
+                    root.toggle-favorite(row);
+                }
+                reorder(delta) => {
+                    root.move-favorite(delta);
+                }
+                filter-selected(i) => {
+                    root.filter-favorites(i);
+                }
+                navigate(i) => {
+                    root.navigate(i);
+                }
+                rows-visible(first, count) => {
+                    root.rows-visible(first, count);
+                }
             }
 
             guide := GuideScreen {
@@ -327,6 +378,9 @@ export component AppWindow inherits Window {
                 }
                 later => {
                     root.guide-shift(1);
+                }
+                favorite => {
+                    root.toggle-favorite(root.guide-row);
                 }
                 navigate(i) => {
                     root.navigate(i);
@@ -376,18 +430,6 @@ export component AppWindow inherits Window {
                 season-index: root.details-season-index;
                 episodes: root.details-episodes;
                 episode-index <=> root.details-episode-index;
-                play => {
-                    root.details-play();
-                }
-                restart => {
-                    root.details-restart();
-                }
-                season-selected(i) => {
-                    root.details-season-selected(i);
-                }
-                back => {
-                    root.details-back();
-                }
                 navigate(i) => {
                     root.navigate(i);
                 }
@@ -418,52 +460,10 @@ export component AppWindow inherits Window {
             banner-visible: root.banner-visible;
             info-visible <=> root.info-visible;
             info: root.info;
-            back => {
-                root.back();
-            }
-            escape => {
-                root.escape();
-            }
-            zap(delta) => {
-                root.zap(delta);
-            }
-            show-banner => {
-                root.show-banner();
-            }
-            toggle-pause => {
-                root.toggle-pause();
-            }
-            seek(seconds) => {
-                root.seek(seconds);
-            }
-            seek-to(fraction) => {
-                root.seek-to(fraction);
-            }
-            set-volume(percent) => {
-                root.set-volume(percent);
-            }
-            change-volume(delta) => {
-                root.change-volume(delta);
-            }
-            go-live => {
-                root.go-live();
-            }
-            toggle-mute => {
-                root.toggle-mute();
-            }
             tracks: root.track-items;
             tracks-kind: root.tracks-kind;
             tracks-open <=> root.tracks-open;
             tracks-index <=> root.tracks-index;
-            open-tracks(kind) => {
-                root.open-tracks(kind);
-            }
-            choose-track(kind, id) => {
-                root.choose-track(kind, id);
-            }
-            toggle-fullscreen => {
-                root.toggle-fullscreen();
-            }
         }
 
         login-screen := LoginScreen {

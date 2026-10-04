@@ -13,10 +13,14 @@ impl Session {
             2 => Some(Screen::Guide),
             3 => Some(Screen::Movies),
             4 => Some(Screen::Series),
+            7 => Some(Screen::Favorites),
             _ => None,
         };
         if let Some(screen) = place {
             self.remember_screen(screen);
+        }
+        if matches!(item, 1 | 2) {
+            self.leave_favorites();
         }
         match item {
             1 => {
@@ -34,6 +38,7 @@ impl Session {
             4 => self.open_vod(Kind::Series),
             5 => self.focus_search(),
             6 => self.open_settings(),
+            7 => self.open_favorites(),
             _ => {}
         }
     }

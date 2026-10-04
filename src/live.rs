@@ -3,8 +3,14 @@
 //! Every signed-in provider is a [`Source`]. The [`View`] picks one
 //! provider, whose groups are "All channels" and its categories, or all of
 //! them, where every provider's groups are listed and tagged with its name.
-//! A group is a list of rows, each a channel of its own provider.
+//! A group is a list of rows, each a channel of its own provider. The
+//! Favorites group comes first in every view, across providers.
 
+mod favorites;
+
+use std::collections::HashSet;
+
+use itele::favorites::Favorite;
 use itele::provider::Library;
 use itele::xtream::{LiveStream, StreamId};
 use slint::{Color, Image, SharedString};
@@ -21,6 +27,12 @@ pub struct Catalog {
     sources: Vec<Source>,
     view: View,
     groups: Vec<Group>,
+    /// The channel favorites, in the user's order.
+    favorites: Vec<Favorite>,
+    /// Each favorite's provider and stream id, for the hearts on rows.
+    favorite_keys: HashSet<(String, String)>,
+    /// The provider the Favorites group shows; `None` shows every one.
+    favorites_filter: Option<String>,
 }
 
 /// One signed-in provider's channels.
@@ -64,17 +76,26 @@ pub struct GuideKey {
 
 struct Group {
     name: String,
-    /// The provider the group belongs to.
-    owner: usize,
+    /// The provider the group belongs to; `None` for Favorites.
+    owner: Option<usize>,
     rows: Vec<Row>,
 }
 
-/// A channel in a group: indexes into the sources and that source's
-/// streams.
+/// A row of a group.
 #[derive(Clone, Copy)]
-struct Row {
-    source: usize,
-    stream: usize,
+enum Row {
+    /// A provider's channel: indexes into the sources and that source's
+    /// streams.
+    Channel { source: usize, stream: usize },
+    /// A favorite whose provider does not list its channel (now): an index
+    /// into the favorites.
+    Gone(usize),
+}
+
+/// What a row shows.
+enum Entry<'a> {
+    Channel(&'a Source, &'a LiveStream),
+    Gone(&'a Favorite),
 }
 
 // Public API
@@ -140,11 +161,11 @@ impl Catalog {
             .map(|g| GroupItem {
                 name: g.name.as_str().into(),
                 count: thousands(g.rows.len()).into(),
-                provider: if tagged {
-                    self.sources[g.owner].name.as_str().into()
-                } else {
-                    SharedString::new()
+                provider: match g.owner {
+                    Some(owner) if tagged => self.sources[owner].name.as_str().into(),
+                    _ => SharedString::new(),
                 },
+                favorites: g.owner.is_none(),
             })
             .collect()
     }
@@ -165,47 +186,71 @@ impl Catalog {
     }
 
     /// Rows for the channels in `group`; tagged with their provider when
-    /// every provider is listed.
+    /// rows from several providers show. Favorites are numbered in order.
     pub fn channel_items(&self, group: usize) -> Vec<ChannelItem> {
-        let tagged = self.view == View::All;
+        let across = self.groups.get(group).is_some_and(|g| g.owner.is_none());
+        let tagged = across || self.view == View::All;
         self.rows(group)
             .enumerate()
-            .map(|(row, (source, stream))| {
-                let tag = tagged.then(|| (source.name.as_str(), self.hue(source)));
-                channel_item(source, stream, row, tag)
+            .map(|(row, entry)| match entry {
+                Entry::Channel(source, stream) => {
+                    let tag = tagged.then(|| (source.name.as_str(), self.hue(source)));
+                    let mut item = channel_item(source, stream, row, tag);
+                    item.favorite = self.is_favorite(&source.id, stream.id);
+                    if across {
+                        item.number = (row + 1).to_string().into();
+                    }
+                    item
+                }
+                Entry::Gone(favorite) => self.gone_item(favorite, row),
             })
             .collect()
     }
 
-    /// The provider and channel at `row` of `group`.
+    /// The provider and channel at `row` of `group`; `None` for a favorite
+    /// its provider does not list.
     pub fn stream(&self, group: usize, row: usize) -> Option<(&Source, &LiveStream)> {
         let r = self.groups.get(group)?.rows.get(row)?;
-        Some(self.at(*r))
+        match self.entry(*r) {
+            Entry::Channel(source, stream) => Some((source, stream)),
+            Entry::Gone(_) => None,
+        }
     }
 
     /// Where each row of `group` finds its programmes.
     pub fn row_guides(&self, group: usize) -> Vec<GuideKey> {
         self.rows(group)
-            .map(|(source, stream)| GuideKey {
-                provider: source.id.clone(),
-                channel: stream
-                    .epg_channel_id
-                    .as_deref()
-                    .unwrap_or("")
-                    .to_lowercase(),
+            .map(|entry| match entry {
+                Entry::Channel(source, stream) => GuideKey {
+                    provider: source.id.clone(),
+                    channel: stream
+                        .epg_channel_id
+                        .as_deref()
+                        .unwrap_or("")
+                        .to_lowercase(),
+                },
+                Entry::Gone(_) => GuideKey::default(),
             })
             .collect()
     }
 
     /// Days of catch-up each row in `group` keeps; 0 for none.
     pub fn row_archive(&self, group: usize) -> Vec<u32> {
-        self.rows(group).map(|(_, s)| s.archive_days).collect()
+        self.rows(group)
+            .map(|entry| match entry {
+                Entry::Channel(_, stream) => stream.archive_days,
+                Entry::Gone(_) => 0,
+            })
+            .collect()
     }
 
     /// Each row's logo URL in `group`, empty when the provider has none.
     pub fn row_logos(&self, group: usize) -> Vec<String> {
         self.rows(group)
-            .map(|(_, s)| s.icon.clone().unwrap_or_default())
+            .map(|entry| match entry {
+                Entry::Channel(_, stream) => stream.icon.clone().unwrap_or_default(),
+                Entry::Gone(favorite) => favorite.poster.clone(),
+            })
             .collect()
     }
 
@@ -263,24 +308,35 @@ impl Catalog {
 
     /// The row of a provider's channel in `group`, if the group lists it.
     pub fn row_of(&self, group: usize, provider: &str, stream: StreamId) -> Option<usize> {
-        self.rows(group)
-            .position(|(source, s)| source.id == provider && s.id == stream)
+        self.rows(group).position(
+            |entry| matches!(entry, Entry::Channel(source, s) if source.id == provider && s.id == stream),
+        )
+    }
+
+    /// The first group of a provider, after Favorites.
+    pub fn first_group(&self) -> usize {
+        usize::from(self.favorites_group().is_some())
     }
 }
 
 // Private API
 impl Catalog {
-    /// The provider and channel of each row of `group`.
-    fn rows(&self, group: usize) -> impl Iterator<Item = (&Source, &LiveStream)> {
+    /// What each row of `group` shows.
+    fn rows(&self, group: usize) -> impl Iterator<Item = Entry<'_>> {
         self.groups
             .get(group)
             .into_iter()
-            .flat_map(|g| g.rows.iter().map(|r| self.at(*r)))
+            .flat_map(|g| g.rows.iter().map(|r| self.entry(*r)))
     }
 
-    fn at(&self, row: Row) -> (&Source, &LiveStream) {
-        let source = &self.sources[row.source];
-        (source, &source.library.streams[row.stream])
+    fn entry(&self, row: Row) -> Entry<'_> {
+        match row {
+            Row::Channel { source, stream } => {
+                let source = &self.sources[source];
+                Entry::Channel(source, &source.library.streams[stream])
+            }
+            Row::Gone(favorite) => Entry::Gone(&self.favorites[favorite]),
+        }
     }
 
     fn hue(&self, source: &Source) -> Color {
@@ -288,7 +344,7 @@ impl Catalog {
     }
 
     fn regroup(&mut self) {
-        let mut groups = Vec::new();
+        let mut groups: Vec<Group> = self.favorites_group_rows().into_iter().collect();
         for (index, source) in self.sources.iter().enumerate() {
             if self.view == View::One(source.id.clone()) || self.view == View::All {
                 groups.extend(source_groups(index, source));
@@ -301,13 +357,13 @@ impl Catalog {
 /// "All channels", then each category with channels, in provider order.
 fn source_groups(index: usize, source: &Source) -> Vec<Group> {
     let streams = &source.library.streams;
-    let row = |stream| Row {
+    let row = |stream| Row::Channel {
         source: index,
         stream,
     };
     let mut groups = vec![Group {
         name: ALL_CHANNELS.to_owned(),
-        owner: index,
+        owner: Some(index),
         rows: (0..streams.len()).map(row).collect(),
     }];
     for category in &source.library.categories {
@@ -320,7 +376,7 @@ fn source_groups(index: usize, source: &Source) -> Vec<Group> {
         if !rows.is_empty() {
             groups.push(Group {
                 name: category.name.clone(),
-                owner: index,
+                owner: Some(index),
                 rows,
             });
         }
@@ -347,6 +403,8 @@ fn channel_item(
         group: category.into(),
         provider: provider.into(),
         hue,
+        favorite: false,
+        gone: false,
         short: short_name(&stream.name).into(),
         tint: tint(&stream.name),
         logo: Image::default(),
@@ -364,186 +422,4 @@ fn channel_item(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use itele::xtream;
-
-    fn source(id: &str, streams: &str) -> Source {
-        Source {
-            id: id.into(),
-            name: id.to_uppercase(),
-            library: Library {
-                account: xtream::parse_account(r#"{"user_info":{"auth":1,"status":"Active"}}"#)
-                    .unwrap(),
-                categories: xtream::parse_categories(
-                    r#"[{"category_id":"1","category_name":"News"},
-                        {"category_id":"2","category_name":"Empty"},
-                        {"category_id":"3","category_name":"Sports"}]"#,
-                )
-                .unwrap(),
-                streams: xtream::parse_live_streams(streams).unwrap(),
-            },
-        }
-    }
-
-    const NORTH: &str = r#"[{"num":10,"name":"Meridian News","stream_id":1,"category_id":"1"},
-        {"num":11,"name":"Volt Sports 1","stream_id":2,"category_id":"3",
-         "tv_archive":1,"tv_archive_duration":7},
-        {"name":"Loose Channel","stream_id":3}]"#;
-    const SOUTH: &str = r#"[{"num":1,"name":"Rivage 1","stream_id":1,"category_id":"1"}]"#;
-
-    fn names(catalog: &Catalog) -> Vec<String> {
-        catalog
-            .group_items()
-            .iter()
-            .map(|g| g.name.to_string())
-            .collect()
-    }
-
-    #[test]
-    fn one_provider_lists_all_then_non_empty_categories() {
-        let mut catalog = Catalog::default();
-        catalog.upsert(source("north", NORTH));
-        catalog.upsert(source("south", SOUTH));
-        catalog.set_view(View::One("north".into()));
-        assert_eq!(names(&catalog), ["All channels", "News", "Sports"]);
-        assert!(catalog.group_items().iter().all(|g| g.provider.is_empty()));
-        assert_eq!(catalog.group_len(0), 3);
-        let (source, volt) = catalog.stream(2, 0).unwrap();
-        assert_eq!(
-            (source.id.as_str(), volt.name.as_str()),
-            ("north", "Volt Sports 1")
-        );
-        assert!(catalog.stream(2, 1).is_none());
-    }
-
-    #[test]
-    fn all_view_tags_every_providers_groups() {
-        let mut catalog = Catalog::default();
-        catalog.upsert(source("north", NORTH));
-        catalog.upsert(source("south", SOUTH));
-        assert_eq!(catalog.view(), &View::All);
-        assert_eq!(
-            names(&catalog),
-            ["All channels", "News", "Sports", "All channels", "News"]
-        );
-        let items = catalog.group_items();
-        assert_eq!(
-            (items[0].provider.as_str(), items[3].provider.as_str()),
-            ("NORTH", "SOUTH")
-        );
-        assert_eq!(catalog.total_channels(), 4);
-        let rows = catalog.channel_items(4);
-        assert_eq!(
-            (rows[0].group.as_str(), rows[0].provider.as_str()),
-            ("News", "SOUTH")
-        );
-        assert_ne!(rows[0].hue, catalog.channel_items(0)[0].hue, "a hue each");
-        let guides = catalog.row_guides(4);
-        assert_eq!(guides[0].provider, "south");
-    }
-
-    #[test]
-    fn channel_rows_carry_number_group_and_archive() {
-        let mut catalog = Catalog::default();
-        catalog.upsert(source("north", NORTH));
-        catalog.set_view(View::One("north".into()));
-        let rows = catalog.channel_items(0);
-        assert_eq!(rows[0].number, "10");
-        assert_eq!(rows[0].provider, "", "one provider: no tags");
-        assert_eq!(rows[1].group, "Sports");
-        assert_eq!(rows[1].archive, "Catch-up 7 days");
-        assert_eq!(
-            rows[2].number, "3",
-            "no provider number: falls back to the row"
-        );
-        assert_eq!(rows[2].group, "");
-        assert_eq!(catalog.row_of(2, "north", StreamId(2)), Some(0));
-        assert_eq!(catalog.row_of(1, "north", StreamId(2)), None);
-        assert_eq!(
-            catalog.row_of(2, "south", StreamId(2)),
-            None,
-            "same id, other provider"
-        );
-    }
-
-    #[test]
-    fn removing_the_viewed_provider_shows_all() {
-        let mut catalog = Catalog::default();
-        catalog.upsert(source("north", NORTH));
-        catalog.upsert(source("south", SOUTH));
-        catalog.set_view(View::One("south".into()));
-        catalog.remove("south");
-        assert_eq!(catalog.view(), &View::All);
-        assert_eq!(names(&catalog), ["All channels", "News", "Sports"]);
-    }
-
-    #[test]
-    fn a_provider_still_loading_can_be_viewed() {
-        let mut catalog = Catalog::default();
-        catalog.upsert(source("north", NORTH));
-        catalog.set_view(View::One("south".into()));
-        assert_eq!(catalog.group_count(), 0);
-        catalog.upsert(source("south", SOUTH));
-        assert_eq!(catalog.view(), &View::One("south".into()));
-        assert_eq!(names(&catalog), ["All channels", "News"]);
-    }
-
-    #[test]
-    fn upsert_replaces_in_place() {
-        let mut catalog = Catalog::default();
-        catalog.upsert(source("north", NORTH));
-        catalog.upsert(source("south", SOUTH));
-        catalog.upsert(source("north", SOUTH));
-        let ids: Vec<_> = catalog.sources().iter().map(|s| s.id.as_str()).collect();
-        assert_eq!(ids, ["north", "south"]);
-        assert_eq!(catalog.total_channels(), 2);
-    }
-
-    #[test]
-    fn search_ranks_prefixes_then_word_starts() {
-        let mut catalog = Catalog::default();
-        catalog.upsert(source(
-            "north",
-            r#"[{"name":"Sports Extra","stream_id":1},{"name":"Volt Sports 1","stream_id":2},
-                {"name":"Esports Arena","stream_id":3},{"name":"Meridian News","stream_id":4}]"#,
-        ));
-        catalog.upsert(source("south", r#"[{"name":"SPORTS","stream_id":1}]"#));
-        let names: Vec<_> = catalog
-            .search_channels("sports", 10)
-            .iter()
-            .map(|h| (h.source.id.as_str(), h.stream.name.as_str()))
-            .collect();
-        assert_eq!(
-            names,
-            [
-                ("south", "SPORTS"),
-                ("north", "Sports Extra"),
-                ("north", "Volt Sports 1"),
-                ("north", "Esports Arena")
-            ]
-        );
-        assert_eq!(
-            catalog.search_channels("volt 1", 10).len(),
-            1,
-            "every word must match"
-        );
-        assert!(catalog.search_channels("  ", 10).is_empty());
-        assert_eq!(catalog.search_channels("s", 2).len(), 2, "limit");
-    }
-
-    #[test]
-    fn by_guide_id_ignores_case() {
-        let mut catalog = Catalog::default();
-        catalog.upsert(source(
-            "north",
-            r#"[{"name":"One","stream_id":7,"epg_channel_id":"One.UK"}]"#,
-        ));
-        assert_eq!(
-            catalog.by_guide_id("north", "one.uk").unwrap().1.id,
-            StreamId(7)
-        );
-        assert!(catalog.by_guide_id("south", "one.uk").is_none());
-        assert!(catalog.by_guide_id("north", "two.uk").is_none());
-    }
-}
+mod tests;

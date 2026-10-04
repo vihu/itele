@@ -125,6 +125,8 @@ impl Session {
         {
             eprintln!("remove watch history: {e}");
         }
+        self.forget_favorites(&slot.provider.id);
+        self.refresh_favorites();
         let cleanup = slot
             .provider
             .forget_password()
@@ -156,7 +158,7 @@ impl Session {
                 .and_then(|i| state.slots.get(i))
                 .map_or(View::All, |slot| View::One(slot.provider.id.clone()));
             state.catalog.set_view(view);
-            state.group = 0;
+            state.group = state.catalog.first_group();
         }
         self.refresh_lists();
     }
@@ -196,6 +198,7 @@ impl Session {
                     meta: until(&slot.provider.id)
                         .unwrap_or_else(|| slot.status.clone())
                         .into(),
+                    hue: state.catalog.hue_of(&slot.provider.id),
                 })
                 .collect();
             let viewed = match state.catalog.view() {
@@ -295,7 +298,7 @@ impl Session {
                 {
                     let mut state = self.state.borrow_mut();
                     state.catalog.set_view(View::One(id));
-                    state.group = 0;
+                    state.group = state.catalog.first_group();
                 }
                 self.refresh_lists();
                 self.show(Screen::Live);
