@@ -23,6 +23,13 @@ pub(super) struct ShelfState {
     pub(super) status: String,
 }
 
+impl ShelfState {
+    /// Whether loading started (it may have finished).
+    pub(super) fn started(&self) -> bool {
+        self.started
+    }
+}
+
 /// A shelf that finished loading.
 pub(super) enum Loaded {
     Movies(Shelf<Movie>),

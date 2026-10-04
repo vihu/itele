@@ -89,6 +89,18 @@ pub(super) fn minutes_left(seconds: i64) -> String {
     format!("{} left", hours_minutes((seconds.max(0) + 59) / 60))
 }
 
+/// How long ago something `seconds` old happened: `just now`,
+/// `14 min ago`, `2 h ago`, `yesterday`, `3 days ago`.
+pub(super) fn ago(seconds: i64) -> String {
+    match seconds.max(0) {
+        s if s < 60 => "just now".to_owned(),
+        s if s < 3600 => format!("{} min ago", s / 60),
+        s if s < 86_400 => format!("{} h ago", s / 3600),
+        s if s < 2 * 86_400 => "yesterday".to_owned(),
+        s => format!("{} days ago", s / 86_400),
+    }
+}
+
 /// A running time: `45 min`, `1 h 34 min`, to the nearest minute.
 pub(super) fn runtime(seconds: i64) -> String {
     hours_minutes((seconds.max(0) + 30) / 60)
@@ -122,6 +134,10 @@ mod tests {
         assert_eq!(minutes_left(72 * 60), "1 h 12 min left");
         assert_eq!(minutes_left(-5), "0 min left");
         assert_eq!(runtime(5645), "1 h 34 min");
+        assert_eq!(ago(30), "just now");
+        assert_eq!(ago(14 * 60 + 5), "14 min ago");
+        assert_eq!(ago(30 * 3600), "yesterday");
+        assert_eq!(ago(3 * 86_400), "3 days ago");
         assert_eq!(runtime(2 * 3600 + 10), "2 h");
     }
 

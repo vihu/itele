@@ -10,13 +10,14 @@ import { InfoLine, InfoPair, PlayerScreen, PlayerState, TrackItem } from "player
 import { GuideCell, GuideDetails, GuideRow, GuideScreen, GuideTick } from "guide.slint";
 import { ProviderItem } from "models.slint";
 import { SearchItem, SearchScreen } from "search.slint";
-import { ProvidersPanel, SwitcherPanel } from "popups.slint";
+import { SwitcherPanel } from "popups.slint";
+import { Fact, ProviderDetails, SettingsScreen } from "settings.slint";
 import { PosterItem, VodScreen } from "vod.slint";
 import { DetailsScreen, EpisodeItem, SeasonItem, TitleDetails } from "details.slint";
 
-export { ChannelItem, GroupItem, ProviderItem, SearchItem, GuideCell, GuideDetails, GuideRow, GuideTick, EpisodeItem, InfoLine, InfoPair, PlayerState, PosterItem, ProgrammeInfo, SeasonItem, TitleDetails, TrackItem, UpcomingItem }
+export { ChannelItem, Fact, GroupItem, ProviderItem, SearchItem, GuideCell, GuideDetails, GuideRow, GuideTick, EpisodeItem, InfoLine, InfoPair, PlayerState, PosterItem, ProgrammeInfo, ProviderDetails, SeasonItem, TitleDetails, TrackItem, UpcomingItem }
 
-export enum Screen { login, live, guide, search, movies, series, details, player }
+export enum Screen { login, live, guide, search, movies, series, details, settings, player }
 
 
 export component AppWindow inherits Window {
@@ -40,6 +41,11 @@ export component AppWindow inherits Window {
     callback add-provider();
     callback sign-out(int);
     callback view-selected(int);
+
+    // Settings.
+    in property <[ProviderDetails]> settings-providers;
+    in property <string> version;
+    callback rename-provider(int, string);
 
     // Live TV.
     in property <[GroupItem]> groups;
@@ -175,6 +181,8 @@ export component AppWindow inherits Window {
             vod.focus-keys();
         } else if (root.screen == Screen.details) {
             details-screen.focus-keys();
+        } else if (root.screen == Screen.settings) {
+            settings-screen.focus-keys();
         } else {
             player-screen.focus-keys();
         }
@@ -226,7 +234,7 @@ export component AppWindow inherits Window {
             root.watch();
         }
         settings-clicked => {
-            settings.show();
+            root.navigate(6);
         }
         navigate(i) => {
             root.navigate(i);
@@ -288,7 +296,7 @@ export component AppWindow inherits Window {
             root.navigate(i);
         }
         settings-clicked => {
-            settings.show();
+            root.navigate(6);
         }
     }
 
@@ -312,7 +320,7 @@ export component AppWindow inherits Window {
             root.navigate(i);
         }
         settings-clicked => {
-            settings.show();
+            root.navigate(6);
         }
     }
 
@@ -346,7 +354,7 @@ export component AppWindow inherits Window {
             root.next-provider();
         }
         settings-clicked => {
-            settings.show();
+            root.navigate(6);
         }
         switch-clicked => {
             switcher.show();
@@ -379,7 +387,26 @@ export component AppWindow inherits Window {
             root.navigate(i);
         }
         settings-clicked => {
-            settings.show();
+            root.navigate(6);
+        }
+    }
+
+    settings-screen := SettingsScreen {
+        visible: root.screen == Screen.settings;
+        providers: root.settings-providers;
+        avatar: root.avatar;
+        version: root.version;
+        rename(i, name) => {
+            root.rename-provider(i, name);
+        }
+        sign-out(i) => {
+            root.sign-out(i);
+        }
+        add-provider => {
+            root.add-provider();
+        }
+        navigate(i) => {
+            root.navigate(i);
         }
     }
 
@@ -470,25 +497,6 @@ export component AppWindow inherits Window {
             selected(i) => {
                 switcher.close();
                 root.view-selected(i);
-            }
-        }
-    }
-
-    // Signed-in providers, each with sign out, and Add provider.
-    settings := PopupWindow {
-        x: 84px;
-        y: root.height - self.height - 16px;
-        width: 360px;
-        close-policy: close-on-click-outside;
-        ProvidersPanel {
-            providers: root.providers;
-            sign-out(i) => {
-                settings.close();
-                root.sign-out(i);
-            }
-            add-provider => {
-                settings.close();
-                root.add-provider();
             }
         }
     }

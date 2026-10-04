@@ -1,0 +1,386 @@
+// Settings: the sections column and, for now, the Providers section.
+// Layout: .ai-docs/mockups/07-settings.html.
+
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { Button, ButtonKind, Hint } from "atoms.slint";
+import { Fact, ProviderDetails } from "models.slint";
+import { Rail } from "rail.slint";
+
+export { Fact, ProviderDetails }
+
+component SectionItem inherits Rectangle {
+    in property <image> icon;
+    in property <string> text;
+    in property <string> count;
+    in property <bool> selected;
+    callback clicked();
+    height: 40px;
+    border-radius: Theme.radius-sm;
+    background: selected ? Theme.accent-soft : touch.has-hover ? Theme.surface-2 : transparent;
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        spacing: 12px;
+        VerticalLayout {
+            alignment: center;
+            Image {
+                source: root.icon;
+                width: 18px;
+                height: 18px;
+                colorize: root.selected ? Theme.accent : Theme.text-2;
+            }
+        }
+        Text {
+            text: root.text;
+            color: root.selected ? Theme.accent : touch.has-hover ? Theme.text : Theme.text-2;
+            font-size: Theme.fs-md;
+            font-weight: 500;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+        }
+        Text {
+            text: root.count;
+            color: root.selected ? Theme.accent : Theme.text-3;
+            font-size: Theme.fs-sm;
+            vertical-alignment: center;
+        }
+    }
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+// A label over a value.
+component FactView inherits VerticalLayout {
+    in property <Fact> fact;
+    spacing: 3px;
+    Text {
+        text: root.fact.label;
+        color: Theme.text-3;
+        font-size: Theme.fs-xs;
+        font-weight: 600;
+    }
+    Text {
+        text: root.fact.value;
+        color: Theme.text;
+        font-size: Theme.fs-sm;
+        font-weight: 500;
+        overflow: elide;
+    }
+}
+
+component ProviderBlock inherits VerticalLayout {
+    in property <ProviderDetails> provider;
+    callback rename(string);
+    callback sign-out();
+    // Enter in the name field: hand the keyboard back to the screen.
+    callback done();
+    padding-top: 22px;
+    padding-bottom: 26px;
+    spacing: 20px;
+    HorizontalLayout {
+        spacing: 16px;
+        Rectangle {
+            height: 44px;
+            horizontal-stretch: 1;
+            border-radius: Theme.radius-md;
+            background: field.has-focus ? Theme.surface-2 : field-touch.has-hover ? Theme.surface-3 : Theme.surface-2;
+            border-width: field.has-focus ? 2px : 0px;
+            border-color: Theme.accent;
+            field-touch := TouchArea {
+                mouse-cursor: text;
+                clicked => {
+                    field.focus();
+                }
+            }
+            HorizontalLayout {
+                padding-left: 14px;
+                padding-right: 14px;
+                spacing: 10px;
+                Rectangle {
+                    horizontal-stretch: 1;
+                    if field.text == "": Text {
+                        x: 0;
+                        height: parent.height;
+                        text: root.provider.placeholder;
+                        color: Theme.text-3;
+                        font-size: Theme.fs-lg;
+                        font-weight: 500;
+                        vertical-alignment: center;
+                    }
+                    field := TextInput {
+                        height: parent.height;
+                        text: root.provider.name;
+                        color: Theme.text;
+                        font-size: Theme.fs-lg;
+                        font-weight: 700;
+                        vertical-alignment: center;
+                        single-line: true;
+                        selection-background-color: Theme.accent;
+                        selection-foreground-color: Theme.accent-ink;
+                        // Focus inside the screen's key handler does not move
+                        // to it, so the field lets go first; losing focus
+                        // saves the name.
+                        accepted => {
+                            self.clear-focus();
+                            root.done();
+                        }
+                        changed has-focus => {
+                            if (!self.has-focus) {
+                                root.rename(self.text);
+                            }
+                        }
+                    }
+                }
+                Text {
+                    text: "Name";
+                    color: Theme.text-3;
+                    font-size: Theme.fs-sm;
+                    vertical-alignment: center;
+                }
+            }
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            VerticalLayout {
+                alignment: center;
+                Rectangle {
+                    width: 8px;
+                    height: 8px;
+                    border-radius: 4px;
+                    background: root.provider.warn ? Theme.accent : #3fb978;
+                }
+            }
+            Text {
+                text: root.provider.state;
+                color: Theme.text-2;
+                font-size: Theme.fs-sm;
+                font-weight: 500;
+                vertical-alignment: center;
+            }
+        }
+    }
+    if root.provider.notice != "": Rectangle {
+        border-radius: Theme.radius-md;
+        background: Theme.accent-soft;
+        HorizontalLayout {
+            padding: 12px;
+            padding-left: 14px;
+            spacing: 10px;
+            VerticalLayout {
+                alignment: start;
+                Image {
+                    source: @image-url("icons/info.svg");
+                    width: 16px;
+                    height: 16px;
+                    colorize: Theme.accent;
+                }
+            }
+            Text {
+                text: root.provider.notice;
+                color: Theme.text;
+                font-size: Theme.fs-sm;
+                wrap: word-wrap;
+                horizontal-stretch: 1;
+            }
+        }
+    }
+    for row in [root.provider.facts-top, root.provider.facts-bottom]: HorizontalLayout {
+        spacing: 24px;
+        // Equal columns: no preferred width, all stretch alike.
+        for fact in row: FactView {
+            fact: fact;
+            min-width: 0px;
+            preferred-width: 0px;
+            horizontal-stretch: 1;
+        }
+    }
+    HorizontalLayout {
+        alignment: end;
+        Button {
+            kind: ButtonKind.danger;
+            text: "Sign out";
+            icon: @image-url("icons/arrow-left.svg");
+            has-icon: true;
+            clicked => {
+                root.sign-out();
+            }
+        }
+    }
+    Rectangle {
+        height: 1px;
+        background: Theme.line;
+    }
+}
+
+export component SettingsScreen inherits Rectangle {
+    in property <[ProviderDetails]> providers;
+    in property <string> avatar;
+    in property <string> version;
+    callback rename(int, string);
+    callback sign-out(int);
+    callback add-provider();
+    callback navigate(int);
+
+    public function focus-keys() {
+        keys.focus();
+    }
+
+    background: Theme.bg;
+    keys := FocusScope {
+        key-pressed(event) => {
+            let key = event.text.to-lowercase();
+            if (event.text == Key.Escape) {
+                root.navigate(1);
+            } else if (key == "g") {
+                root.navigate(2);
+            } else if (event.text == "/" || (event.modifiers.control && key == "k")) {
+                root.navigate(5);
+            } else {
+                return reject;
+            }
+            accept
+        }
+
+        HorizontalLayout {
+            Rail {
+                avatar: root.avatar;
+                active: 6;
+                navigate(i) => {
+                    root.navigate(i);
+                }
+                settings-clicked => {
+                    root.focus-keys();
+                }
+            }
+            VerticalLayout {
+                HorizontalLayout {
+                    vertical-stretch: 1;
+                    // Sections.
+                    Rectangle {
+                        width: 250px;
+                        VerticalLayout {
+                            padding-top: 24px;
+                            padding-left: 12px;
+                            padding-right: 12px;
+                            spacing: 2px;
+                            alignment: start;
+                            VerticalLayout {
+                                padding-left: 12px;
+                                padding-bottom: 22px;
+                                spacing: 2px;
+                                Text {
+                                    text: "Settings";
+                                    color: Theme.text;
+                                    font-size: Theme.fs-2xl;
+                                    font-weight: 800;
+                                }
+                                Text {
+                                    text: "itele " + root.version;
+                                    color: Theme.text-3;
+                                    font-size: Theme.fs-sm;
+                                }
+                            }
+                            SectionItem {
+                                icon: @image-url("icons/tv.svg");
+                                text: "Providers";
+                                count: root.providers.length;
+                                selected: true;
+                            }
+                        }
+                        Rectangle {
+                            x: parent.width - 1px;
+                            width: 1px;
+                            background: Theme.line;
+                        }
+                    }
+                    ScrollView {
+                        horizontal-stretch: 1;
+                        VerticalLayout {
+                            padding-left: 48px;
+                            padding-right: 48px;
+                            padding-top: 30px;
+                            padding-bottom: 64px;
+                            alignment: start;
+                            HorizontalLayout {
+                                max-width: 820px;
+                                spacing: 24px;
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    horizontal-stretch: 1;
+                                    Text {
+                                        text: "Providers";
+                                        color: Theme.text;
+                                        font-size: Theme.fs-xl;
+                                        font-weight: 700;
+                                    }
+                                    Text {
+                                        text: "Each provider keeps its own channels, movies, series and guide. Search and the guide span all of them.";
+                                        color: Theme.text-3;
+                                        font-size: Theme.fs-sm;
+                                        wrap: word-wrap;
+                                    }
+                                }
+                                VerticalLayout {
+                                    alignment: end;
+                                    Button {
+                                        kind: ButtonKind.secondary;
+                                        text: "Add provider";
+                                        icon: @image-url("icons/plus.svg");
+                                        has-icon: true;
+                                        clicked => {
+                                            root.add-provider();
+                                        }
+                                    }
+                                }
+                            }
+                            Rectangle {
+                                height: 10px;
+                            }
+                            for provider[i] in root.providers: ProviderBlock {
+                                max-width: 820px;
+                                provider: provider;
+                                rename(name) => {
+                                    root.rename(i, name);
+                                }
+                                sign-out => {
+                                    root.sign-out(i);
+                                }
+                            }
+                        }
+                    }
+                }
+                // Shortcut hints.
+                Rectangle {
+                    height: 44px;
+                    Rectangle {
+                        y: 0;
+                        height: 1px;
+                        background: Theme.line;
+                    }
+                    HorizontalLayout {
+                        padding-left: 24px;
+                        spacing: 22px;
+                        alignment: start;
+                        Hint {
+                            keys: ["Tab"];
+                            label: "Next field";
+                        }
+                        Hint {
+                            keys: ["Enter"];
+                            label: "Save name";
+                        }
+                        Hint {
+                            keys: ["Esc"];
+                            label: "Back";
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

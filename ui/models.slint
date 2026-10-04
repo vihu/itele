@@ -177,3 +177,27 @@ export struct EpisodeItem {
     // When resumable, for example "18 min left".
     left: string,
 }
+
+// One "label: value" fact about a provider in Settings.
+export struct Fact {
+    label: string,
+    value: string,
+}
+
+// A signed-in provider in Settings.
+export struct ProviderDetails {
+    // The name the user gave it; empty for the automatic one.
+    name: string,
+    // The automatic name, shown while the field is empty.
+    placeholder: string,
+    // For example "Active · until 12 Jan 2027".
+    state: string,
+    // Something needs attention: the state dot turns amber.
+    warn: bool,
+    // What went wrong last, or empty.
+    notice: string,
+    // Two rows of four facts: server, user, connections, lists; then
+    // channels, movies, series, guide.
+    facts-top: [Fact],
+    facts-bottom: [Fact],
+}

@@ -87,6 +87,18 @@ impl Catalog {
         self.regroup();
     }
 
+    /// The provider with `id`, once its channels have loaded.
+    pub fn source(&self, id: &str) -> Option<&Source> {
+        self.sources.iter().find(|s| s.id == id)
+    }
+
+    /// Renames the provider with `id`.
+    pub fn rename(&mut self, id: &str, name: &str) {
+        for source in self.sources.iter_mut().filter(|s| s.id == id) {
+            name.clone_into(&mut source.name);
+        }
+    }
+
     /// Removes the provider with `id`; a view of it falls back to all.
     pub fn remove(&mut self, id: &str) {
         self.sources.retain(|s| s.id != id);

@@ -45,7 +45,7 @@ impl Session {
 
         // Only the account is checked here; the channel list, which can be
         // tens of megabytes, loads in the background once Live TV shows.
-        let name = self.display_name(&credentials);
+        let name = self.automatic_name(credentials.server(), credentials.username());
         let paths = self.paths.clone();
         thread::spawn(move || {
             let provider = Provider::new(name, &credentials);
@@ -212,8 +212,10 @@ impl Session {
         app.set_groups(ModelRc::new(VecModel::from(groups)));
         app.set_status(self.view_status());
         self.select_group(group);
-        if matches!(app.get_screen(), Screen::Movies | Screen::Series) {
-            self.refresh_vod();
+        match app.get_screen() {
+            Screen::Movies | Screen::Series => self.refresh_vod(),
+            Screen::Settings => self.push_settings(),
+            _ => {}
         }
     }
 }
@@ -357,26 +359,24 @@ impl Session {
         self.refresh_lists();
     }
 
-    /// The new provider's name: its host, widened to the whole address and
-    /// then the username while another provider has the same name.
-    fn display_name(&self, credentials: &Credentials) -> String {
+    /// The name a provider gets unless the user names it: its host,
+    /// widened to the whole address and then the username while another
+    /// provider has the same name.
+    pub(super) fn automatic_name(&self, server: &str, username: &str) -> String {
         let state = self.state.borrow();
         let others: Vec<&Provider> = state
             .slots
             .iter()
             .map(|slot| &slot.provider)
-            .filter(|p| p.server != credentials.server() || p.username != credentials.username())
+            .filter(|p| p.server != server || p.username != username)
             .collect();
-        let host = host_of(credentials.server());
+        let host = host_of(server);
         if !others.iter().any(|p| host_of(&p.server) == host) {
             return host.to_owned();
         }
-        let address = credentials
-            .server()
-            .split_once("://")
-            .map_or(credentials.server(), |(_, rest)| rest);
-        if others.iter().any(|p| p.server == credentials.server()) {
-            format!("{address} · {}", credentials.username())
+        let address = server.split_once("://").map_or(server, |(_, rest)| rest);
+        if others.iter().any(|p| p.server == server) {
+            format!("{address} · {username}")
         } else {
             address.to_owned()
         }

@@ -57,6 +57,7 @@ impl Session {
             3 => self.open_vod(super::vod::Kind::Movies),
             4 => self.open_vod(super::vod::Kind::Series),
             5 => self.open_search(),
+            6 => self.open_settings(),
             _ => {}
         }
     }

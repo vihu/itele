@@ -40,6 +40,8 @@ pub trait Shelves {
     fn set_view(&mut self, view: View);
     /// Removes the provider with `id`.
     fn remove(&mut self, id: &str);
+    /// Renames the provider with `id`.
+    fn rename(&mut self, id: &str, name: &str);
     /// Titles across every loaded provider.
     fn total(&self) -> usize;
     /// Titles of the provider with `id`, if it has loaded.
@@ -151,6 +153,12 @@ impl<T: Tile> Shelves for Catalog<T> {
     fn remove(&mut self, id: &str) {
         self.sources.retain(|s| s.id != id);
         self.regroup();
+    }
+
+    fn rename(&mut self, id: &str, name: &str) {
+        for source in self.sources.iter_mut().filter(|s| s.id == id) {
+            name.clone_into(&mut source.name);
+        }
     }
 
     fn total(&self) -> usize {

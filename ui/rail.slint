@@ -27,7 +27,7 @@ component RailItem inherits Rectangle {
 export component Rail inherits Rectangle {
     in property <string> avatar;
     // Index of the highlighted item: 0 home, 1 live TV, 2 guide, 3 movies,
-    // 4 series, 5 search.
+    // 4 series, 5 search, 6 settings.
     in property <int> active: 1;
     callback settings-clicked();
     callback navigate(int);
@@ -78,6 +78,7 @@ export component Rail inherits Rectangle {
             padding-bottom: 8px;
             RailItem {
                 icon: @image-url("icons/settings.svg");
+                active: root.active == 6;
                 clicked => {
                     root.settings-clicked();
                 }

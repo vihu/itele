@@ -16,6 +16,7 @@ mod player;
 mod providers;
 mod search;
 mod series;
+mod settings;
 mod shelves;
 mod timefmt;
 mod vod;
@@ -244,11 +245,13 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
     app.on_details_restart(|| with_session(|s| s.details_play(Start::Beginning)));
     app.on_details_back(|| with_session(|s| s.details_back()));
     app.on_details_season_selected(|i| with_session(|s| s.details_season_selected(i)));
+    app.on_rename_provider(|i, name| with_session(|s| s.rename_provider(i, &name)));
     app.on_open_tracks(|kind| with_session(|s| s.open_tracks(track_kind(kind))));
     app.on_choose_track(|kind, id| {
         with_session(|s| tracks::select(&s.engine, track_kind(kind), i64::from(id)));
     });
 
+    app.set_version(env!("CARGO_PKG_VERSION").into());
     session.open_saved();
     session
         .guide_timer
@@ -347,18 +350,22 @@ impl Session {
 /// For example `1,284 channels · until 12 Jan 2027`.
 fn library_status(library: &Library) -> String {
     let channels = format!("{} channels", thousands(library.streams.len()));
-    let until = library.account.expires_at.and_then(|secs| {
-        let at = jiff::Timestamp::from_second(i64::try_from(secs).ok()?).ok()?;
-        Some(
-            at.to_zoned(jiff::tz::TimeZone::system())
-                .strftime("%-d %b %Y")
-                .to_string(),
-        )
-    });
-    match until {
+    match expiry(&library.account) {
         Some(date) => format!("{channels} · until {date}"),
         None => channels,
     }
+}
+
+/// When the account expires, for example `12 Jan 2027`; `None` when it
+/// does not.
+fn expiry(account: &itele::xtream::Account) -> Option<String> {
+    let secs = i64::try_from(account.expires_at?).ok()?;
+    let at = jiff::Timestamp::from_second(secs).ok()?;
+    Some(
+        at.to_zoned(jiff::tz::TimeZone::system())
+            .strftime("%-d %b %Y")
+            .to_string(),
+    )
 }
 
 /// Builds mpv's wakeup callback, which turns playback events into the

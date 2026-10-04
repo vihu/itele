@@ -1,7 +1,6 @@
-// The provider switcher and the providers list, shown in popups.
+// The provider switcher, shown in a popup.
 
 import { Theme } from "theme.slint";
-import { Button, ButtonKind } from "atoms.slint";
 import { ProviderItem } from "models.slint";
 
 // One choice in the provider switcher.
@@ -69,77 +68,6 @@ export component SwitcherPanel inherits Rectangle {
             selected: root.view-index == i;
             clicked => {
                 root.selected(i);
-            }
-        }
-    }
-}
-
-// Signed-in providers, each with sign out, and Add provider.
-export component ProvidersPanel inherits Rectangle {
-    in property <[ProviderItem]> providers;
-    callback sign-out(int);
-    callback add-provider();
-
-    background: Theme.surface-2;
-    border-radius: Theme.radius-lg;
-    drop-shadow-blur: 28px;
-    drop-shadow-offset-y: 10px;
-    drop-shadow-color: #00000073;
-    VerticalLayout {
-        padding: 20px;
-        spacing: 14px;
-        Text {
-            text: "Providers";
-            color: Theme.text;
-            font-size: Theme.fs-lg;
-            font-weight: 700;
-        }
-        for provider[i] in root.providers: HorizontalLayout {
-            spacing: 12px;
-            VerticalLayout {
-                horizontal-stretch: 1;
-                spacing: 2px;
-                Text {
-                    text: provider.name;
-                    color: Theme.text;
-                    font-size: Theme.fs-md;
-                    font-weight: 600;
-                    overflow: elide;
-                }
-                Text {
-                    text: provider.user;
-                    color: Theme.text-2;
-                    font-size: Theme.fs-sm;
-                    overflow: elide;
-                }
-                Text {
-                    text: provider.status;
-                    color: Theme.text-3;
-                    font-size: Theme.fs-sm;
-                    wrap: word-wrap;
-                }
-            }
-            VerticalLayout {
-                alignment: center;
-                Button {
-                    kind: ButtonKind.ghost;
-                    text: "Sign out";
-                    clicked => {
-                        root.sign-out(i);
-                    }
-                }
-            }
-        }
-        HorizontalLayout {
-            alignment: start;
-            Button {
-                kind: ButtonKind.secondary;
-                text: "Add provider";
-                icon: @image-url("icons/plus.svg");
-                has-icon: true;
-                clicked => {
-                    root.add-provider();
-                }
             }
         }
     }
