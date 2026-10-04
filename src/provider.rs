@@ -10,6 +10,7 @@ use std::io;
 use camino::{Utf8Path, Utf8PathBuf};
 use serde::{Deserialize, Serialize};
 
+use crate::settings::Settings;
 use crate::xtream::{self, Credentials};
 
 mod cache;
@@ -23,6 +24,8 @@ pub type Result<T = ()> = std::result::Result<T, Error>;
 const KEYCHAIN_SERVICE: &str = "itele";
 /// File in the config directory that lists the saved providers.
 const PROVIDERS_FILE: &str = "providers.json";
+/// File in the config directory that holds the settings.
+const SETTINGS_FILE: &str = "settings.json";
 
 /// Where itele keeps its settings, its data and its cache.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -43,6 +46,10 @@ pub struct Provider {
     pub server: String,
     /// Account username.
     pub username: String,
+    /// Hours added to this provider's guide times, for guides that are
+    /// off by an hour or two.
+    #[serde(default)]
+    pub guide_shift: i32,
 }
 
 /// What can go wrong loading or saving providers.
@@ -152,6 +159,31 @@ impl Paths {
         }
     }
 
+    /// Loads the settings; none saved yet is the defaults.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] when the file exists but cannot be read, and
+    /// [`Error::Config`] when it is not valid JSON.
+    pub fn load_settings(&self) -> Result<Settings> {
+        let path = self.config.join(SETTINGS_FILE);
+        match fs::read_to_string(&path) {
+            Ok(text) => serde_json::from_str(&text).map_err(|e| Error::Config(path, e)),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Settings::default()),
+            Err(e) => Err(Error::Io(path, e)),
+        }
+    }
+
+    /// Saves the settings, replacing the file atomically.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] when the config directory cannot be written.
+    pub fn save_settings(&self, settings: &Settings) -> Result {
+        let json = serde_json::to_string_pretty(settings).expect("settings always serialize");
+        write_atomic(&self.config.join(SETTINGS_FILE), &json)
+    }
+
     /// The watch history store, shared by all providers. It is data, not
     /// cache: clearing the cache keeps it.
     pub fn history_path(&self) -> Utf8PathBuf {
@@ -202,6 +234,7 @@ impl Provider {
             name: name.into(),
             server: credentials.server().to_owned(),
             username: credentials.username().to_owned(),
+            guide_shift: 0,
         }
     }
 
@@ -351,6 +384,29 @@ mod tests {
         assert_eq!(paths.load_providers().unwrap(), vec![other]);
         assert!(cache.read(Action::LiveCategories).is_none());
         paths.remove_provider(&provider()).unwrap();
+    }
+
+    #[test]
+    fn settings_save_and_load_and_default_when_missing() {
+        let (_dir, paths) = temp_paths();
+        assert_eq!(paths.load_settings().unwrap(), Settings::default());
+        let settings = Settings {
+            keep_days: 3,
+            ..Settings::default()
+        };
+        paths.save_settings(&settings).unwrap();
+        assert_eq!(paths.load_settings().unwrap(), settings);
+    }
+
+    #[test]
+    fn providers_from_before_the_guide_shift_load() {
+        let (_dir, paths) = temp_paths();
+        write_atomic(
+            &paths.config.join(PROVIDERS_FILE),
+            r#"[{"id":"a","name":"A","server":"http://a","username":"u"}]"#,
+        )
+        .unwrap();
+        assert_eq!(paths.load_providers().unwrap()[0].guide_shift, 0);
     }
 
     #[test]
