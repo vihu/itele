@@ -12,7 +12,10 @@
 use std::time::Duration;
 
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
-use serde::Deserialize;
+
+mod raw;
+
+use raw::{RawCategory, RawEnvelope, RawLiveStream};
 
 /// Result type for this module.
 pub type Result<T = ()> = std::result::Result<T, Error>;
@@ -430,100 +433,6 @@ fn normalize_server(input: &str) -> Result<String> {
         return Err(invalid());
     }
     Ok(format!("{scheme}://{rest}"))
-}
-
-#[derive(Deserialize)]
-struct RawEnvelope {
-    #[serde(default)]
-    user_info: Option<RawUserInfo>,
-}
-
-#[derive(Deserialize)]
-struct RawUserInfo {
-    #[serde(default, deserialize_with = "lenient::u64")]
-    auth: Option<u64>,
-    #[serde(default, deserialize_with = "lenient::string")]
-    status: Option<String>,
-    #[serde(default, deserialize_with = "lenient::u64")]
-    exp_date: Option<u64>,
-    #[serde(default, deserialize_with = "lenient::u64")]
-    is_trial: Option<u64>,
-    #[serde(default, deserialize_with = "lenient::u64")]
-    active_cons: Option<u64>,
-    #[serde(default, deserialize_with = "lenient::u64")]
-    max_connections: Option<u64>,
-    #[serde(default, deserialize_with = "lenient::strings")]
-    allowed_output_formats: Vec<String>,
-    #[serde(default, deserialize_with = "lenient::string")]
-    message: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct RawCategory {
-    #[serde(default, deserialize_with = "lenient::string")]
-    category_id: Option<String>,
-    #[serde(default, deserialize_with = "lenient::string")]
-    category_name: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct RawLiveStream {
-    #[serde(default, deserialize_with = "lenient::u64")]
-    stream_id: Option<u64>,
-    #[serde(default, deserialize_with = "lenient::u64")]
-    num: Option<u64>,
-    #[serde(default, deserialize_with = "lenient::string")]
-    name: Option<String>,
-    #[serde(default, deserialize_with = "lenient::string")]
-    category_id: Option<String>,
-    #[serde(default, deserialize_with = "lenient::string")]
-    stream_icon: Option<String>,
-    #[serde(default, deserialize_with = "lenient::string")]
-    epg_channel_id: Option<String>,
-    #[serde(default, deserialize_with = "lenient::u64")]
-    tv_archive: Option<u64>,
-    #[serde(default, deserialize_with = "lenient::u64")]
-    tv_archive_duration: Option<u64>,
-}
-
-/// Field deserializers that accept the shapes providers actually send.
-mod lenient {
-    use serde::{Deserialize, Deserializer};
-    use serde_json::Value;
-
-    /// A non-negative integer sent as a number, a numeric string, or a bool;
-    /// anything else is `None`.
-    pub fn u64<'de, D: Deserializer<'de>>(d: D) -> Result<Option<u64>, D::Error> {
-        Ok(match Value::deserialize(d)? {
-            Value::Number(n) => n.as_u64(),
-            Value::String(s) => s.trim().parse().ok(),
-            Value::Bool(b) => Some(u64::from(b)),
-            Value::Null | Value::Array(_) | Value::Object(_) => None,
-        })
-    }
-
-    /// Text sent as a string or a number; empty text is `None`.
-    pub fn string<'de, D: Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
-        Ok(match Value::deserialize(d)? {
-            Value::String(s) if !s.trim().is_empty() => Some(s),
-            Value::Number(n) => Some(n.to_string()),
-            _ => None,
-        })
-    }
-
-    /// A list of strings; anything that is not a string list is empty.
-    pub fn strings<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<String>, D::Error> {
-        Ok(match Value::deserialize(d)? {
-            Value::Array(items) => items
-                .into_iter()
-                .filter_map(|v| match v {
-                    Value::String(s) => Some(s),
-                    _ => None,
-                })
-                .collect(),
-            _ => Vec::new(),
-        })
-    }
 }
 
 #[cfg(test)]

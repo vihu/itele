@@ -1,0 +1,41 @@
+// Data the Rust side hands to the screens.
+
+export struct GroupItem {
+    name: string,
+    count: string,
+    // The group's provider, shown when every provider is listed.
+    provider: string,
+}
+
+export struct ChannelItem {
+    number: string,
+    name: string,
+    group: string,
+    short: string,
+    tint: color,
+    logo: image,
+    has-logo: bool,
+    archive: string,
+    // The programme airing now, empty without a guide.
+    now-title: string,
+    // How far into it, 0 to 1; below 0 without a guide.
+    now-progress: float,
+    next-time: string,
+    next-title: string,
+}
+
+// The selected channel's programme, for the preview and the banner.
+export struct ProgrammeInfo {
+    title: string,
+    // For example "21:00 – 22:00".
+    time: string,
+    // For example "38 min left".
+    left: string,
+    description: string,
+    progress: float,
+}
+
+export struct UpcomingItem {
+    time: string,
+    title: string,
+}

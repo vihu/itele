@@ -1,0 +1,95 @@
+// The icon rail on the left of the browse screens.
+
+import { Theme } from "theme.slint";
+
+component RailItem inherits Rectangle {
+    in property <image> icon;
+    in property <bool> active;
+    callback clicked();
+    width: 48px;
+    height: 44px;
+    border-radius: Theme.radius-md;
+    background: active ? Theme.surface-3 : touch.has-hover ? Theme.surface-2 : transparent;
+    Image {
+        source: root.icon;
+        width: 20px;
+        height: 20px;
+        colorize: root.active ? Theme.accent : touch.has-hover ? Theme.text : Theme.text-2;
+    }
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+export component Rail inherits Rectangle {
+    in property <string> avatar;
+    callback settings-clicked();
+    width: 76px;
+    background: Theme.surface-1;
+    VerticalLayout {
+        padding-top: 22px;
+        padding-bottom: 16px;
+        spacing: 4px;
+        HorizontalLayout {
+            alignment: center;
+            padding-bottom: 22px;
+            Text {
+                text: "i";
+                color: Theme.text;
+                font-size: 22px;
+                font-weight: 800;
+            }
+            Text {
+                text: ".";
+                color: Theme.accent;
+                font-size: 22px;
+                font-weight: 800;
+            }
+        }
+        for item in [
+            { icon: @image-url("icons/home.svg"), active: false },
+            { icon: @image-url("icons/tv.svg"), active: true },
+            { icon: @image-url("icons/guide.svg"), active: false },
+            { icon: @image-url("icons/film.svg"), active: false },
+            { icon: @image-url("icons/series.svg"), active: false },
+            { icon: @image-url("icons/search.svg"), active: false },
+        ]: HorizontalLayout {
+            alignment: center;
+            RailItem {
+                icon: item.icon;
+                active: item.active;
+            }
+        }
+        Rectangle {
+            vertical-stretch: 1;
+        }
+        HorizontalLayout {
+            alignment: center;
+            padding-bottom: 8px;
+            RailItem {
+                icon: @image-url("icons/settings.svg");
+                clicked => {
+                    root.settings-clicked();
+                }
+            }
+        }
+        HorizontalLayout {
+            alignment: center;
+            Rectangle {
+                width: 34px;
+                height: 34px;
+                border-radius: 9px;
+                background: Theme.surface-4;
+                Text {
+                    text: root.avatar;
+                    color: Theme.text;
+                    font-size: Theme.fs-sm;
+                    font-weight: 700;
+                }
+            }
+        }
+    }
+}
