@@ -196,8 +196,33 @@ export struct ProviderDetails {
     warn: bool,
     // What went wrong last, or empty.
     notice: string,
+    // A refresh is running.
+    busy: bool,
     // Two rows of four facts: server, user, connections, lists; then
     // channels, movies, series, guide.
     facts-top: [Fact],
     facts-bottom: [Fact],
+}
+
+// Which setting changed, for the window's set-setting callback.
+export enum SettingKey { guide-refresh, list-refresh, keep-days }
+
+// The current settings, as the controls show them: each choice is the
+// index of its option.
+export struct SettingValues {
+    // Every 6 h, every 12 h, daily, only by hand.
+    guide-refresh: int,
+    list-refresh: int,
+    // 3, 7 or 14 days.
+    keep-days: int,
+}
+
+// One provider's guide in Settings.
+export struct GuideStatus {
+    name: string,
+    // For example "Updated 2 h ago · 18,402 programmes" or "Updating…".
+    status: string,
+    busy: bool,
+    // The time shift, for example "+1 h".
+    shift: string,
 }

@@ -4,6 +4,7 @@
 use std::collections::HashSet;
 use std::io::BufReader;
 use std::ops::Range;
+use std::time::Duration;
 
 use camino::Utf8Path;
 use itele::epg::{Programme, Store};
@@ -12,16 +13,26 @@ use itele::xtream::Client;
 use slint::{Model, ModelRc, SharedString, VecModel};
 
 use super::Session;
+use super::refresh::Due;
 use super::timefmt::{clock, minutes_left, now};
 use crate::names::thousands;
 use crate::ui::{ProgrammeInfo, UpcomingItem};
 
-/// A guide younger than this is not downloaded again.
-const MAX_AGE: i64 = 12 * 3600;
-/// Programmes kept before now: a week of catch-up, plus a day.
-const KEEP_BEHIND: i64 = 8 * 86_400;
 /// Programmes kept after now.
 const KEEP_AHEAD: i64 = 8 * 86_400;
+/// Seconds in a day.
+const DAY: i64 = 86_400;
+
+/// How one provider's guide refresh goes.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct Plan {
+    /// When the stored guide is old enough to download again.
+    pub(super) due: Due,
+    /// Days of past programmes to keep, for catch-up.
+    pub(super) keep_days: u32,
+    /// Hours added to every programme time.
+    pub(super) shift_hours: i32,
+}
 /// How far ahead the preview's "Up next" looks.
 const UPCOMING_SPAN: i64 = 12 * 3600;
 /// Programmes listed under "Up next".
@@ -37,24 +48,28 @@ pub(super) fn wanted_channels(library: &Library) -> HashSet<String> {
         .collect()
 }
 
-/// Imports `provider`'s guide into the store at `path` unless it is fresh.
-/// Runs on a worker thread. `Ok(None)` means the stored guide was fresh.
+/// Imports `provider`'s guide into the store at `path` when `plan` says it
+/// is due. Runs on a worker thread. `Ok(None)` means it was not due.
 pub(super) fn refresh(
     client: &Client,
     path: &Utf8Path,
     provider: &str,
     wanted: &HashSet<String>,
+    plan: Plan,
 ) -> Result<Option<usize>, String> {
     let mut store = Store::open(path).map_err(|e| e.to_string())?;
     let now = jiff::Timestamp::now().as_second();
     let imported = store.imported_at(provider).map_err(|e| e.to_string())?;
-    if imported.is_some_and(|at| now - at < MAX_AGE) {
+    let age = imported.map(|at| Duration::from_secs(u64::try_from(now - at).unwrap_or(0)));
+    if !plan.due.is_due(age) {
         return Ok(None);
     }
     let xml = client.xmltv().map_err(|e| e.to_string())?;
-    let keep = now - KEEP_BEHIND..now + KEEP_AHEAD;
+    // A day more than asked, so the oldest kept day is whole.
+    let keep = now - (i64::from(plan.keep_days) + 1) * DAY..now + KEEP_AHEAD;
+    let shift = i64::from(plan.shift_hours) * 3600;
     store
-        .import(provider, wanted, keep, BufReader::new(xml), now)
+        .import(provider, wanted, keep, shift, BufReader::new(xml), now)
         .map(Some)
         .map_err(|e| e.to_string())
 }

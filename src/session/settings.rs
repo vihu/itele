@@ -1,14 +1,31 @@
-//! The Settings screen: each provider's details, and renaming it.
+//! The Settings screen: each provider's details and name, the guide's
+//! refresh settings, and saving changes.
 
 use itele::provider::Provider;
+use itele::settings::Refresh;
 use itele::xtream::Action;
-use slint::{ModelRc, VecModel};
+use slint::{ComponentHandle, ModelRc, VecModel};
 
+use super::refresh::Force;
 use super::timefmt::{ago, now};
 use super::{Session, Slot, State, expiry};
 use crate::names::thousands;
-use crate::ui::{Fact, ProviderDetails, Screen};
+use crate::ui::{
+    Fact, GuideStatus, ProviderDetails, Screen, SettingKey, SettingValues, SettingsData,
+};
 use crate::vod::Shelves;
+
+/// The interval choices, in the order the screen lists them.
+const INTERVALS: [Refresh; 4] = [
+    Refresh::Every6Hours,
+    Refresh::Every12Hours,
+    Refresh::Daily,
+    Refresh::Manual,
+];
+/// The days-to-keep choices, in order.
+const KEEP_DAYS: [u32; 3] = [3, 7, 14];
+/// The largest guide time shift, in hours either way.
+const MAX_SHIFT: i32 = 12;
 
 impl Session {
     pub(super) fn open_settings(&self) {
@@ -16,29 +33,67 @@ impl Session {
         self.push_settings();
     }
 
-    /// Pushes every provider's details to the Settings screen.
+    /// Pushes the providers, the guide rows and the setting values to the
+    /// Settings screen.
     pub(super) fn push_settings(&self) {
         let Some(app) = self.app.upgrade() else {
             return;
         };
-        let rows: Vec<ProviderDetails> = {
+        let (providers, guide): (Vec<ProviderDetails>, Vec<GuideStatus>) = {
             let state = self.state.borrow();
             state
                 .slots
                 .iter()
-                .map(|slot| self.details_of(&state, slot))
-                .collect()
+                .map(|slot| (self.details_of(&state, slot), self.guide_of(slot)))
+                .unzip()
         };
-        app.set_settings_providers(ModelRc::new(VecModel::from(rows)));
+        let settings = self.settings.borrow();
+        let data = app.global::<SettingsData>();
+        data.set_providers(ModelRc::new(VecModel::from(providers)));
+        data.set_guide_rows(ModelRc::new(VecModel::from(guide)));
+        data.set_values(SettingValues {
+            guide_refresh: index_of(&INTERVALS, &settings.guide_refresh),
+            list_refresh: index_of(&INTERVALS, &settings.list_refresh),
+            keep_days: index_of(&KEEP_DAYS, &settings.keep_days),
+        });
+    }
+
+    /// One control changed `key` to its option `value`.
+    pub(super) fn set_setting(&self, key: SettingKey, value: i32) {
+        let pick = |options: &[_]| {
+            usize::try_from(value)
+                .ok()
+                .and_then(|i| options.get(i).copied())
+        };
+        {
+            let mut settings = self.settings.borrow_mut();
+            match key {
+                SettingKey::GuideRefresh => match pick(&INTERVALS) {
+                    Some(refresh) => settings.guide_refresh = refresh,
+                    None => return,
+                },
+                SettingKey::ListRefresh => match pick(&INTERVALS) {
+                    Some(refresh) => settings.list_refresh = refresh,
+                    None => return,
+                },
+                SettingKey::KeepDays => {
+                    match usize::try_from(value).ok().and_then(|i| KEEP_DAYS.get(i)) {
+                        Some(&days) => settings.keep_days = days,
+                        None => return,
+                    }
+                }
+            }
+            if let Err(e) = self.paths.save_settings(&settings) {
+                eprintln!("save settings: {e}");
+            }
+        }
+        self.push_settings();
     }
 
     /// Renames the provider at `index`; an empty name brings back the
     /// automatic one.
     pub(super) fn rename_provider(&self, index: i32, name: &str) {
-        let Some(provider) = usize::try_from(index)
-            .ok()
-            .and_then(|i| self.state.borrow().slots.get(i).map(|s| s.provider.clone()))
-        else {
+        let Some(provider) = self.provider_at(index) else {
             return;
         };
         let name = match name.trim() {
@@ -52,26 +107,113 @@ impl Session {
             name: name.clone(),
             ..provider
         };
-        if let Err(e) = self.paths.add_provider(&renamed) {
-            eprintln!("rename provider: {e}");
+        if !self.save_provider(renamed) {
             return;
         }
         {
             let mut state = self.state.borrow_mut();
-            let id = renamed.id.clone();
-            if let Some(slot) = state.slots.iter_mut().find(|s| s.provider.id == id) {
-                slot.provider = renamed;
-            }
+            let id = self.provider_at_id(&state, index);
             state.catalog.rename(&id, &name);
             state.movies.rename(&id, &name);
             state.shows.rename(&id, &name);
         }
         self.refresh_lists();
     }
+
+    /// Moves the guide of the provider at `index` by `sign` hours and
+    /// downloads it again.
+    pub(super) fn shift_guide(&self, index: i32, sign: i32) {
+        let Some(provider) = self.provider_at(index) else {
+            return;
+        };
+        let shift = (provider.guide_shift + sign.signum()).clamp(-MAX_SHIFT, MAX_SHIFT);
+        if shift == provider.guide_shift {
+            return;
+        }
+        let id = provider.id.clone();
+        if self.save_provider(Provider {
+            guide_shift: shift,
+            ..provider
+        }) {
+            self.refresh_provider(&id, Force::No, Force::Yes);
+        }
+    }
+
+    /// Refreshes the provider at `index`: its guide, and with `lists` its
+    /// channel and title lists too.
+    pub(super) fn refresh_provider_at(&self, index: i32, lists: Force) {
+        if let Some(provider) = self.provider_at(index) {
+            self.refresh_provider(&provider.id, lists, Force::Yes);
+        }
+    }
 }
 
 // Private API
 impl Session {
+    fn provider_at(&self, index: i32) -> Option<Provider> {
+        let state = self.state.borrow();
+        let slot = state.slots.get(usize::try_from(index).ok()?)?;
+        Some(slot.provider.clone())
+    }
+
+    fn provider_at_id(&self, state: &State, index: i32) -> String {
+        usize::try_from(index)
+            .ok()
+            .and_then(|i| state.slots.get(i))
+            .map(|s| s.provider.id.clone())
+            .unwrap_or_default()
+    }
+
+    /// Saves `provider` and puts it in its slot; `false` when saving failed.
+    fn save_provider(&self, provider: Provider) -> bool {
+        if let Err(e) = self.paths.add_provider(&provider) {
+            eprintln!("save provider: {e}");
+            return false;
+        }
+        let mut state = self.state.borrow_mut();
+        if let Some(slot) = state
+            .slots
+            .iter_mut()
+            .find(|s| s.provider.id == provider.id)
+        {
+            slot.provider = provider;
+        }
+        true
+    }
+
+    fn guide_of(&self, slot: &Slot) -> GuideStatus {
+        let imported = self
+            .guide
+            .borrow()
+            .as_ref()
+            .and_then(|store| store.imported_at(&slot.provider.id).ok().flatten());
+        let count = slot
+            .guide
+            .strip_prefix("guide: ")
+            .map(|programmes| format!(" · {programmes}"))
+            .unwrap_or_default();
+        let status = if slot.refreshing {
+            "Updating…".to_owned()
+        } else if slot.guide.starts_with("guide failed") {
+            slot.guide.replacen("guide failed", "Could not update", 1)
+        } else {
+            match imported {
+                Some(at) => format!("Updated {}{count}", ago(now() - at)),
+                None => "Not downloaded yet".to_owned(),
+            }
+        };
+        let shift = match slot.provider.guide_shift {
+            0 => "0 h".to_owned(),
+            h => format!("{h:+} h"),
+        };
+        GuideStatus {
+            name: slot.provider.name.as_str().into(),
+            status: status.into(),
+            busy: slot.refreshing,
+            shift: shift.into(),
+        }
+    }
+
     fn details_of(&self, state: &State, slot: &Slot) -> ProviderDetails {
         let provider = &slot.provider;
         let source = state.catalog.source(&provider.id);
@@ -142,6 +284,7 @@ impl Session {
             state: state_line.into(),
             warn: !active || !failed.is_empty(),
             notice: failed.join("\n").into(),
+            busy: slot.refreshing,
             facts_top: ModelRc::new(VecModel::from(vec![
                 fact("Server", address.to_owned()),
                 fact("Username", provider.username.clone()),
@@ -165,4 +308,12 @@ impl Session {
             ])),
         }
     }
+}
+
+/// The position of `value` among `options`, for a segmented control.
+fn index_of<T: PartialEq>(options: &[T], value: &T) -> i32 {
+    options
+        .iter()
+        .position(|o| o == value)
+        .map_or(0, |i| i as i32)
 }

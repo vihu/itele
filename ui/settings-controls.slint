@@ -1,0 +1,151 @@
+// Controls of the Settings screen: section items, a row naming a setting
+// beside its control, a segmented choice, and a stepper.
+
+import { Theme } from "theme.slint";
+
+export component SectionItem inherits Rectangle {
+    in property <image> icon;
+    in property <string> text;
+    in property <string> count;
+    in property <bool> selected;
+    callback clicked();
+    height: 40px;
+    border-radius: Theme.radius-sm;
+    background: selected ? Theme.accent-soft : touch.has-hover ? Theme.surface-2 : transparent;
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        spacing: 12px;
+        VerticalLayout {
+            alignment: center;
+            Image {
+                source: root.icon;
+                width: 18px;
+                height: 18px;
+                colorize: root.selected ? Theme.accent : Theme.text-2;
+            }
+        }
+        Text {
+            text: root.text;
+            color: root.selected ? Theme.accent : touch.has-hover ? Theme.text : Theme.text-2;
+            font-size: Theme.fs-md;
+            font-weight: 500;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+        }
+        Text {
+            text: root.count;
+            color: root.selected ? Theme.accent : Theme.text-3;
+            font-size: Theme.fs-sm;
+            vertical-alignment: center;
+        }
+    }
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+// What a setting is on the left, its control (the children) on the right.
+export component SettingRow inherits VerticalLayout {
+    in property <string> title;
+    in property <string> description;
+    HorizontalLayout {
+        padding-top: 16px;
+        padding-bottom: 16px;
+        spacing: 32px;
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+            horizontal-stretch: 1;
+            Text {
+                text: root.title;
+                color: Theme.text;
+                font-size: Theme.fs-md;
+                font-weight: 600;
+            }
+            if root.description != "": Text {
+                text: root.description;
+                color: Theme.text-3;
+                font-size: Theme.fs-sm;
+                wrap: word-wrap;
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            @children
+        }
+    }
+    Rectangle {
+        height: 1px;
+        background: Theme.line;
+    }
+}
+
+// One of a few choices, side by side.
+export component Segmented inherits Rectangle {
+    in property <[string]> options;
+    in property <int> selected;
+    callback chosen(int);
+    height: 40px;
+    width: row.preferred-width;
+    border-radius: Theme.radius-md;
+    background: Theme.surface-2;
+    row := HorizontalLayout {
+        padding: 3px;
+        spacing: 2px;
+        for option[i] in root.options: Rectangle {
+            width: label.preferred-width + 28px;
+            border-radius: 7px;
+            background: i == root.selected ? Theme.surface-4 : transparent;
+            label := Text {
+                text: option;
+                color: i == root.selected || touch.has-hover ? Theme.text : Theme.text-2;
+                font-size: Theme.fs-sm;
+                font-weight: 600;
+            }
+            touch := TouchArea {
+                mouse-cursor: pointer;
+                clicked => {
+                    root.chosen(i);
+                }
+            }
+        }
+    }
+}
+
+// A value with − and + either side.
+export component Stepper inherits Rectangle {
+    in property <string> value;
+    callback step(int);
+    height: 40px;
+    width: 148px;
+    border-radius: Theme.radius-md;
+    background: Theme.surface-2;
+    HorizontalLayout {
+        for sign[i] in [-1, 0, 1]: Rectangle {
+            width: sign == 0 ? 68px : 40px;
+            if sign != 0: Text {
+                text: sign < 0 ? "−" : "+";
+                color: touch.has-hover ? Theme.text : Theme.text-2;
+                font-size: Theme.fs-lg;
+                font-weight: 600;
+            }
+            if sign == 0: Text {
+                text: root.value;
+                color: Theme.text;
+                font-size: Theme.fs-md;
+                font-weight: 600;
+            }
+            touch := TouchArea {
+                enabled: sign != 0;
+                mouse-cursor: pointer;
+                clicked => {
+                    root.step(sign);
+                }
+            }
+        }
+    }
+}

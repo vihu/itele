@@ -11,11 +11,11 @@ import { GuideCell, GuideDetails, GuideRow, GuideScreen, GuideTick } from "guide
 import { ProviderItem } from "models.slint";
 import { SearchItem, SearchScreen } from "search.slint";
 import { SwitcherPanel } from "popups.slint";
-import { Fact, ProviderDetails, SettingsScreen } from "settings.slint";
+import { Fact, GuideStatus, ProviderDetails, SettingKey, SettingValues, SettingsData, SettingsScreen } from "settings.slint";
 import { PosterItem, VodScreen } from "vod.slint";
 import { DetailsScreen, EpisodeItem, SeasonItem, TitleDetails } from "details.slint";
 
-export { ChannelItem, Fact, GroupItem, ProviderItem, SearchItem, GuideCell, GuideDetails, GuideRow, GuideTick, EpisodeItem, InfoLine, InfoPair, PlayerState, PosterItem, ProgrammeInfo, ProviderDetails, SeasonItem, TitleDetails, TrackItem, UpcomingItem }
+export { ChannelItem, Fact, GroupItem, GuideStatus, SettingKey, SettingValues, SettingsData, ProviderItem, SearchItem, GuideCell, GuideDetails, GuideRow, GuideTick, EpisodeItem, InfoLine, InfoPair, PlayerState, PosterItem, ProgrammeInfo, ProviderDetails, SeasonItem, TitleDetails, TrackItem, UpcomingItem }
 
 export enum Screen { login, live, guide, search, movies, series, details, settings, player }
 
@@ -42,10 +42,6 @@ export component AppWindow inherits Window {
     callback sign-out(int);
     callback view-selected(int);
 
-    // Settings.
-    in property <[ProviderDetails]> settings-providers;
-    in property <string> version;
-    callback rename-provider(int, string);
 
     // Live TV.
     in property <[GroupItem]> groups;
@@ -393,12 +389,7 @@ export component AppWindow inherits Window {
 
     settings-screen := SettingsScreen {
         visible: root.screen == Screen.settings;
-        providers: root.settings-providers;
         avatar: root.avatar;
-        version: root.version;
-        rename(i, name) => {
-            root.rename-provider(i, name);
-        }
         sign-out(i) => {
             root.sign-out(i);
         }

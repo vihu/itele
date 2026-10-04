@@ -1,0 +1,182 @@
+// A signed-in provider in Settings: its name field, state, facts, and
+// Refresh now and Sign out.
+
+import { Theme } from "theme.slint";
+import { Button, ButtonKind } from "atoms.slint";
+import { Fact, ProviderDetails } from "models.slint";
+
+// A label over a value.
+component FactView inherits VerticalLayout {
+    in property <Fact> fact;
+    spacing: 3px;
+    Text {
+        text: root.fact.label;
+        color: Theme.text-3;
+        font-size: Theme.fs-xs;
+        font-weight: 600;
+    }
+    Text {
+        text: root.fact.value;
+        color: Theme.text;
+        font-size: Theme.fs-sm;
+        font-weight: 500;
+        overflow: elide;
+    }
+}
+
+export component ProviderBlock inherits VerticalLayout {
+    in property <ProviderDetails> provider;
+    callback rename(string);
+    callback refresh();
+    callback sign-out();
+    // Enter in the name field: hand the keyboard back to the screen.
+    callback done();
+    padding-top: 22px;
+    padding-bottom: 26px;
+    spacing: 20px;
+    HorizontalLayout {
+        spacing: 16px;
+        Rectangle {
+            height: 44px;
+            horizontal-stretch: 1;
+            border-radius: Theme.radius-md;
+            background: field.has-focus ? Theme.surface-2 : field-touch.has-hover ? Theme.surface-3 : Theme.surface-2;
+            border-width: field.has-focus ? 2px : 0px;
+            border-color: Theme.accent;
+            field-touch := TouchArea {
+                mouse-cursor: text;
+                clicked => {
+                    field.focus();
+                }
+            }
+            HorizontalLayout {
+                padding-left: 14px;
+                padding-right: 14px;
+                spacing: 10px;
+                Rectangle {
+                    horizontal-stretch: 1;
+                    if field.text == "": Text {
+                        x: 0;
+                        height: parent.height;
+                        text: root.provider.placeholder;
+                        color: Theme.text-3;
+                        font-size: Theme.fs-lg;
+                        font-weight: 500;
+                        vertical-alignment: center;
+                    }
+                    field := TextInput {
+                        height: parent.height;
+                        text: root.provider.name;
+                        color: Theme.text;
+                        font-size: Theme.fs-lg;
+                        font-weight: 700;
+                        vertical-alignment: center;
+                        single-line: true;
+                        selection-background-color: Theme.accent;
+                        selection-foreground-color: Theme.accent-ink;
+                        // Focus inside the screen's key handler does not move
+                        // to it, so the field lets go first; losing focus
+                        // saves the name.
+                        accepted => {
+                            self.clear-focus();
+                            root.done();
+                        }
+                        changed has-focus => {
+                            if (!self.has-focus) {
+                                root.rename(self.text);
+                            }
+                        }
+                    }
+                }
+                Text {
+                    text: "Name";
+                    color: Theme.text-3;
+                    font-size: Theme.fs-sm;
+                    vertical-alignment: center;
+                }
+            }
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            VerticalLayout {
+                alignment: center;
+                Rectangle {
+                    width: 8px;
+                    height: 8px;
+                    border-radius: 4px;
+                    background: root.provider.warn ? Theme.accent : #3fb978;
+                }
+            }
+            Text {
+                text: root.provider.state;
+                color: Theme.text-2;
+                font-size: Theme.fs-sm;
+                font-weight: 500;
+                vertical-alignment: center;
+            }
+        }
+    }
+    if root.provider.notice != "": Rectangle {
+        border-radius: Theme.radius-md;
+        background: Theme.accent-soft;
+        HorizontalLayout {
+            padding: 12px;
+            padding-left: 14px;
+            spacing: 10px;
+            VerticalLayout {
+                alignment: start;
+                Image {
+                    source: @image-url("icons/info.svg");
+                    width: 16px;
+                    height: 16px;
+                    colorize: Theme.accent;
+                }
+            }
+            Text {
+                text: root.provider.notice;
+                color: Theme.text;
+                font-size: Theme.fs-sm;
+                wrap: word-wrap;
+                horizontal-stretch: 1;
+            }
+        }
+    }
+    for row in [root.provider.facts-top, root.provider.facts-bottom]: HorizontalLayout {
+        spacing: 24px;
+        // Equal columns: no preferred width, all stretch alike.
+        for fact in row: FactView {
+            fact: fact;
+            min-width: 0px;
+            preferred-width: 0px;
+            horizontal-stretch: 1;
+        }
+    }
+    HorizontalLayout {
+        Button {
+            kind: ButtonKind.secondary;
+            text: root.provider.busy ? "Refreshing…" : "Refresh now";
+            enabled: !root.provider.busy;
+            icon: @image-url("icons/refresh.svg");
+            has-icon: true;
+            clicked => {
+                root.refresh();
+            }
+        }
+        Rectangle {
+            horizontal-stretch: 1;
+        }
+        Button {
+            kind: ButtonKind.danger;
+            text: "Sign out";
+            icon: @image-url("icons/arrow-left.svg");
+            has-icon: true;
+            clicked => {
+                root.sign-out();
+            }
+        }
+    }
+    Rectangle {
+        height: 1px;
+        background: Theme.line;
+    }
+}

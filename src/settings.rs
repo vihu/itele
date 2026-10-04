@@ -47,8 +47,10 @@ pub struct Settings {
 #[serde(rename_all = "snake_case")]
 pub enum Refresh {
     /// When older than 6 hours.
+    #[serde(rename = "6h")]
     Every6Hours,
     /// When older than 12 hours.
+    #[serde(rename = "12h")]
     Every12Hours,
     /// When older than a day.
     Daily,

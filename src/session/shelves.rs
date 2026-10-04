@@ -3,18 +3,15 @@
 //! is missing or old.
 
 use std::thread;
-use std::time::Duration;
 
 use itele::provider::{Cache, Listing, Provider, Shelf};
 use itele::xtream::{Client, Movie, Show};
 
+use super::refresh::{Due, Force};
 use super::vod::Kind;
-use super::{Session, on_ui_thread};
+use super::{Session, Slot, on_ui_thread};
 use crate::names::thousands;
 use crate::vod::Source;
-
-/// A shelf younger than this is not downloaded again.
-const MAX_AGE: Duration = Duration::from_secs(12 * 3600);
 
 /// How one of a provider's shelves is loading.
 #[derive(Default)]
@@ -30,6 +27,16 @@ impl ShelfState {
     }
 }
 
+impl Slot {
+    /// Whether `kind`'s shelf started loading, so refreshes keep it fresh.
+    pub(super) fn shelf_started(&self, kind: Kind) -> bool {
+        match kind {
+            Kind::Movies => self.movies.started,
+            Kind::Series => self.shows.started,
+        }
+    }
+}
+
 /// A shelf that finished loading.
 pub(super) enum Loaded {
     Movies(Shelf<Movie>),
@@ -39,6 +46,7 @@ pub(super) enum Loaded {
 impl Session {
     /// Starts loading `kind` for every provider that has not started yet.
     pub(super) fn load_shelves(&self, kind: Kind) {
+        let due = Due::of(self.settings.borrow().list_refresh, Force::No);
         let mut state = self.state.borrow_mut();
         for slot in &mut state.slots {
             let shelf = slot.shelf_state(kind);
@@ -50,13 +58,13 @@ impl Session {
             let cache = self.paths.cache(&slot.provider);
             let (provider, epoch) = (slot.provider.clone(), slot.epoch);
             match kind {
-                Kind::Movies => load::<Movie>(kind, provider, cache, epoch),
-                Kind::Series => load::<Show>(kind, provider, cache, epoch),
+                Kind::Movies => load::<Movie>(kind, provider, cache, epoch, due),
+                Kind::Series => load::<Show>(kind, provider, cache, epoch, due),
             }
         }
     }
 
-    fn shelf_ready(&self, id: &str, epoch: u64, loaded: Loaded, updating: bool) {
+    pub(super) fn shelf_ready(&self, id: &str, epoch: u64, loaded: Loaded, updating: bool) {
         let kind = loaded.kind();
         {
             let mut state = self.state.borrow_mut();
@@ -93,7 +101,7 @@ impl Session {
         }
     }
 
-    fn shelf_failed(&self, kind: Kind, id: &str, epoch: u64, error: &str) {
+    pub(super) fn shelf_failed(&self, kind: Kind, id: &str, epoch: u64, error: &str) {
         {
             let mut state = self.state.borrow_mut();
             let loaded = state.shelves(kind).count_of(id);
@@ -119,7 +127,7 @@ impl Session {
     }
 }
 
-impl super::Slot {
+impl Slot {
     fn shelf_state(&mut self, kind: Kind) -> &mut ShelfState {
         match kind {
             Kind::Movies => &mut self.movies,
@@ -157,15 +165,15 @@ impl From<Shelf<Show>> for Loaded {
 }
 
 /// Loads a shelf on a worker thread: from the cache first, then from the
-/// provider when the cache is missing or older than [`MAX_AGE`].
-fn load<T>(kind: Kind, provider: Provider, cache: Cache, epoch: u64)
+/// provider when the cache is missing or `due`.
+fn load<T>(kind: Kind, provider: Provider, cache: Cache, epoch: u64, due: Due)
 where
     T: Listing + Send + 'static,
     Shelf<T>: Into<Loaded>,
 {
     thread::spawn(move || {
         let id = provider.id.clone();
-        let fresh = cache.age(T::TITLES).is_some_and(|age| age < MAX_AGE);
+        let fresh = !due.is_due(cache.age(T::TITLES));
         let cached = Shelf::<T>::from_cache(&cache);
         let had_cache = cached.is_some();
         if let Some(shelf) = cached {

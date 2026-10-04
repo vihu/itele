@@ -109,6 +109,20 @@ impl Library {
         })
     }
 
+    /// Fetches only the account, for a current status, expiry and
+    /// connection count, keeping `self`'s categories and channels.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Xtream`] when the request fails or the login is
+    /// rejected, and [`Error::Io`] when the cache cannot be written.
+    pub fn with_fresh_account(self, client: &Client, cache: &Cache) -> Result<Self> {
+        let body = client.fetch(Action::Account).map_err(Error::Xtream)?;
+        let account = xtream::parse_account(&body).map_err(Error::Xtream)?;
+        cache.write(Action::Account, &strip_password(&body))?;
+        Ok(Self { account, ..self })
+    }
+
     /// Fetches the library from the provider and refreshes the cache.
     ///
     /// The account is checked first, so a rejected login fails before the

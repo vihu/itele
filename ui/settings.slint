@@ -4,210 +4,99 @@
 import { ScrollView } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { Button, ButtonKind, Hint } from "atoms.slint";
-import { Fact, ProviderDetails } from "models.slint";
+import { Fact, GuideStatus, ProviderDetails, SettingKey, SettingValues } from "models.slint";
 import { Rail } from "rail.slint";
+import { SectionItem, Segmented, SettingRow, Stepper } from "settings-controls.slint";
+import { ProviderBlock } from "settings-providers.slint";
 
-export { Fact, ProviderDetails }
+export { Fact, GuideStatus, ProviderDetails, SettingKey, SettingValues }
 
-component SectionItem inherits Rectangle {
+// A section's title, what it is for, and its main button.
+component PanelHeader inherits HorizontalLayout {
+    in property <string> title;
+    in property <string> description;
+    in property <string> action;
     in property <image> icon;
-    in property <string> text;
-    in property <string> count;
-    in property <bool> selected;
+    in property <bool> enabled: true;
     callback clicked();
-    height: 40px;
-    border-radius: Theme.radius-sm;
-    background: selected ? Theme.accent-soft : touch.has-hover ? Theme.surface-2 : transparent;
-    HorizontalLayout {
-        padding-left: 12px;
-        padding-right: 12px;
-        spacing: 12px;
-        VerticalLayout {
-            alignment: center;
-            Image {
-                source: root.icon;
-                width: 18px;
-                height: 18px;
-                colorize: root.selected ? Theme.accent : Theme.text-2;
-            }
+    spacing: 24px;
+    padding-bottom: 10px;
+    VerticalLayout {
+        spacing: 4px;
+        horizontal-stretch: 1;
+        Text {
+            text: root.title;
+            color: Theme.text;
+            font-size: Theme.fs-xl;
+            font-weight: 700;
         }
         Text {
-            text: root.text;
-            color: root.selected ? Theme.accent : touch.has-hover ? Theme.text : Theme.text-2;
-            font-size: Theme.fs-md;
-            font-weight: 500;
-            vertical-alignment: center;
-            horizontal-stretch: 1;
-        }
-        Text {
-            text: root.count;
-            color: root.selected ? Theme.accent : Theme.text-3;
+            text: root.description;
+            color: Theme.text-3;
             font-size: Theme.fs-sm;
-            vertical-alignment: center;
+            wrap: word-wrap;
         }
     }
-    touch := TouchArea {
-        mouse-cursor: pointer;
-        clicked => {
-            root.clicked();
-        }
-    }
-}
-
-// A label over a value.
-component FactView inherits VerticalLayout {
-    in property <Fact> fact;
-    spacing: 3px;
-    Text {
-        text: root.fact.label;
-        color: Theme.text-3;
-        font-size: Theme.fs-xs;
-        font-weight: 600;
-    }
-    Text {
-        text: root.fact.value;
-        color: Theme.text;
-        font-size: Theme.fs-sm;
-        font-weight: 500;
-        overflow: elide;
-    }
-}
-
-component ProviderBlock inherits VerticalLayout {
-    in property <ProviderDetails> provider;
-    callback rename(string);
-    callback sign-out();
-    // Enter in the name field: hand the keyboard back to the screen.
-    callback done();
-    padding-top: 22px;
-    padding-bottom: 26px;
-    spacing: 20px;
-    HorizontalLayout {
-        spacing: 16px;
-        Rectangle {
-            height: 44px;
-            horizontal-stretch: 1;
-            border-radius: Theme.radius-md;
-            background: field.has-focus ? Theme.surface-2 : field-touch.has-hover ? Theme.surface-3 : Theme.surface-2;
-            border-width: field.has-focus ? 2px : 0px;
-            border-color: Theme.accent;
-            field-touch := TouchArea {
-                mouse-cursor: text;
-                clicked => {
-                    field.focus();
-                }
-            }
-            HorizontalLayout {
-                padding-left: 14px;
-                padding-right: 14px;
-                spacing: 10px;
-                Rectangle {
-                    horizontal-stretch: 1;
-                    if field.text == "": Text {
-                        x: 0;
-                        height: parent.height;
-                        text: root.provider.placeholder;
-                        color: Theme.text-3;
-                        font-size: Theme.fs-lg;
-                        font-weight: 500;
-                        vertical-alignment: center;
-                    }
-                    field := TextInput {
-                        height: parent.height;
-                        text: root.provider.name;
-                        color: Theme.text;
-                        font-size: Theme.fs-lg;
-                        font-weight: 700;
-                        vertical-alignment: center;
-                        single-line: true;
-                        selection-background-color: Theme.accent;
-                        selection-foreground-color: Theme.accent-ink;
-                        // Focus inside the screen's key handler does not move
-                        // to it, so the field lets go first; losing focus
-                        // saves the name.
-                        accepted => {
-                            self.clear-focus();
-                            root.done();
-                        }
-                        changed has-focus => {
-                            if (!self.has-focus) {
-                                root.rename(self.text);
-                            }
-                        }
-                    }
-                }
-                Text {
-                    text: "Name";
-                    color: Theme.text-3;
-                    font-size: Theme.fs-sm;
-                    vertical-alignment: center;
-                }
-            }
-        }
-        HorizontalLayout {
-            spacing: 8px;
-            VerticalLayout {
-                alignment: center;
-                Rectangle {
-                    width: 8px;
-                    height: 8px;
-                    border-radius: 4px;
-                    background: root.provider.warn ? Theme.accent : #3fb978;
-                }
-            }
-            Text {
-                text: root.provider.state;
-                color: Theme.text-2;
-                font-size: Theme.fs-sm;
-                font-weight: 500;
-                vertical-alignment: center;
-            }
-        }
-    }
-    if root.provider.notice != "": Rectangle {
-        border-radius: Theme.radius-md;
-        background: Theme.accent-soft;
-        HorizontalLayout {
-            padding: 12px;
-            padding-left: 14px;
-            spacing: 10px;
-            VerticalLayout {
-                alignment: start;
-                Image {
-                    source: @image-url("icons/info.svg");
-                    width: 16px;
-                    height: 16px;
-                    colorize: Theme.accent;
-                }
-            }
-            Text {
-                text: root.provider.notice;
-                color: Theme.text;
-                font-size: Theme.fs-sm;
-                wrap: word-wrap;
-                horizontal-stretch: 1;
-            }
-        }
-    }
-    for row in [root.provider.facts-top, root.provider.facts-bottom]: HorizontalLayout {
-        spacing: 24px;
-        // Equal columns: no preferred width, all stretch alike.
-        for fact in row: FactView {
-            fact: fact;
-            min-width: 0px;
-            preferred-width: 0px;
-            horizontal-stretch: 1;
-        }
-    }
-    HorizontalLayout {
+    if root.action != "": VerticalLayout {
         alignment: end;
         Button {
-            kind: ButtonKind.danger;
-            text: "Sign out";
-            icon: @image-url("icons/arrow-left.svg");
+            kind: ButtonKind.secondary;
+            text: root.action;
+            icon: root.icon;
             has-icon: true;
+            enabled: root.enabled;
             clicked => {
-                root.sign-out();
+                root.clicked();
+            }
+        }
+    }
+}
+
+// One provider's guide: how it is, its time shift, and Refresh.
+component GuideRowView inherits VerticalLayout {
+    in property <GuideStatus> status;
+    callback shift(int);
+    callback refresh();
+    HorizontalLayout {
+        padding-top: 14px;
+        padding-bottom: 14px;
+        spacing: 20px;
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+            horizontal-stretch: 1;
+            Text {
+                text: root.status.name;
+                color: Theme.text;
+                font-size: Theme.fs-md;
+                font-weight: 600;
+                overflow: elide;
+            }
+            Text {
+                text: root.status.status;
+                color: root.status.busy ? Theme.accent : Theme.text-3;
+                font-size: Theme.fs-sm;
+                overflow: elide;
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            Stepper {
+                value: root.status.shift;
+                step(sign) => {
+                    root.shift(sign);
+                }
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            Button {
+                kind: ButtonKind.secondary;
+                text: "Refresh";
+                enabled: !root.status.busy;
+                clicked => {
+                    root.refresh();
+                }
             }
         }
     }
@@ -217,11 +106,25 @@ component ProviderBlock inherits VerticalLayout {
     }
 }
 
-export component SettingsScreen inherits Rectangle {
+// What the Settings screen shows and what it asks for; the Rust side
+// fills and answers it.
+export global SettingsData {
     in property <[ProviderDetails]> providers;
-    in property <string> avatar;
+    in property <[GuideStatus]> guide-rows;
+    in property <SettingValues> values;
     in property <string> version;
     callback rename(int, string);
+    callback refresh-provider(int);
+    callback refresh-guide(int);
+    callback refresh-all();
+    callback shift-guide(int, int);
+    callback set-setting(SettingKey, int);
+}
+
+export component SettingsScreen inherits Rectangle {
+    in property <string> avatar;
+    // The section showing: 0 providers, 1 guide.
+    in-out property <int> section;
     callback sign-out(int);
     callback add-provider();
     callback navigate(int);
@@ -230,12 +133,18 @@ export component SettingsScreen inherits Rectangle {
         keys.focus();
     }
 
+    property <[string]> intervals: ["Every 6 h", "Every 12 h", "Daily", "Only by hand"];
+
     background: Theme.bg;
     keys := FocusScope {
         key-pressed(event) => {
             let key = event.text.to-lowercase();
             if (event.text == Key.Escape) {
                 root.navigate(1);
+            } else if (event.text == Key.UpArrow) {
+                root.section = max(0, root.section - 1);
+            } else if (event.text == Key.DownArrow) {
+                root.section = min(1, root.section + 1);
             } else if (key == "g") {
                 root.navigate(2);
             } else if (event.text == "/" || (event.modifiers.control && key == "k")) {
@@ -280,7 +189,7 @@ export component SettingsScreen inherits Rectangle {
                                     font-weight: 800;
                                 }
                                 Text {
-                                    text: "itele " + root.version;
+                                    text: "itele " + SettingsData.version;
                                     color: Theme.text-3;
                                     font-size: Theme.fs-sm;
                                 }
@@ -288,8 +197,21 @@ export component SettingsScreen inherits Rectangle {
                             SectionItem {
                                 icon: @image-url("icons/tv.svg");
                                 text: "Providers";
-                                count: root.providers.length;
-                                selected: true;
+                                count: SettingsData.providers.length;
+                                selected: root.section == 0;
+                                clicked => {
+                                    root.section = 0;
+                                    keys.focus();
+                                }
+                            }
+                            SectionItem {
+                                icon: @image-url("icons/guide.svg");
+                                text: "Guide";
+                                selected: root.section == 1;
+                                clicked => {
+                                    root.section = 1;
+                                    keys.focus();
+                                }
                             }
                         }
                         Rectangle {
@@ -306,49 +228,101 @@ export component SettingsScreen inherits Rectangle {
                             padding-top: 30px;
                             padding-bottom: 64px;
                             alignment: start;
-                            HorizontalLayout {
+                            if root.section == 0: VerticalLayout {
                                 max-width: 820px;
-                                spacing: 24px;
-                                VerticalLayout {
-                                    spacing: 4px;
-                                    horizontal-stretch: 1;
-                                    Text {
-                                        text: "Providers";
-                                        color: Theme.text;
-                                        font-size: Theme.fs-xl;
-                                        font-weight: 700;
-                                    }
-                                    Text {
-                                        text: "Each provider keeps its own channels, movies, series and guide. Search and the guide span all of them.";
-                                        color: Theme.text-3;
-                                        font-size: Theme.fs-sm;
-                                        wrap: word-wrap;
+                                PanelHeader {
+                                    title: "Providers";
+                                    description: "Each provider keeps its own channels, movies, series and guide. Search and the guide span all of them.";
+                                    action: "Add provider";
+                                    icon: @image-url("icons/plus.svg");
+                                    clicked => {
+                                        root.add-provider();
                                     }
                                 }
-                                VerticalLayout {
-                                    alignment: end;
-                                    Button {
-                                        kind: ButtonKind.secondary;
-                                        text: "Add provider";
-                                        icon: @image-url("icons/plus.svg");
-                                        has-icon: true;
-                                        clicked => {
-                                            root.add-provider();
+                                for provider[i] in SettingsData.providers: ProviderBlock {
+                                    provider: provider;
+                                    rename(name) => {
+                                        SettingsData.rename(i, name);
+                                    }
+                                    refresh => {
+                                        SettingsData.refresh-provider(i);
+                                    }
+                                    sign-out => {
+                                        root.sign-out(i);
+                                    }
+                                    done => {
+                                        keys.focus();
+                                    }
+                                }
+                            }
+                            if root.section == 1: VerticalLayout {
+                                max-width: 820px;
+                                PanelHeader {
+                                    title: "Guide";
+                                    description: "itele downloads each provider's guide in the background, at start and while it stays open.";
+                                    action: "Refresh all now";
+                                    icon: @image-url("icons/refresh.svg");
+                                    clicked => {
+                                        SettingsData.refresh-all();
+                                    }
+                                }
+                                SettingRow {
+                                    title: "Refresh the guide";
+                                    description: "How old a guide may get before it is downloaded again. Large guides can take a minute.";
+                                    Segmented {
+                                        options: root.intervals;
+                                        selected: SettingsData.values.guide-refresh;
+                                        chosen(i) => {
+                                            SettingsData.set-setting(SettingKey.guide-refresh, i);
                                         }
                                     }
                                 }
-                            }
-                            Rectangle {
-                                height: 10px;
-                            }
-                            for provider[i] in root.providers: ProviderBlock {
-                                max-width: 820px;
-                                provider: provider;
-                                rename(name) => {
-                                    root.rename(i, name);
+                                SettingRow {
+                                    title: "Refresh channel and title lists";
+                                    description: "Channels, movies and series, from each provider. The account is checked every time.";
+                                    Segmented {
+                                        options: root.intervals;
+                                        selected: SettingsData.values.list-refresh;
+                                        chosen(i) => {
+                                            SettingsData.set-setting(SettingKey.list-refresh, i);
+                                        }
+                                    }
                                 }
-                                sign-out => {
-                                    root.sign-out(i);
+                                SettingRow {
+                                    title: "Keep past programmes";
+                                    description: "For catch-up. Providers rarely keep more than a week. Applies at the next refresh.";
+                                    Segmented {
+                                        options: ["3 days", "7 days", "14 days"];
+                                        selected: SettingsData.values.keep-days;
+                                        chosen(i) => {
+                                            SettingsData.set-setting(SettingKey.keep-days, i);
+                                        }
+                                    }
+                                }
+                                Text {
+                                    text: "Per provider";
+                                    color: Theme.text-3;
+                                    font-size: Theme.fs-sm;
+                                    font-weight: 700;
+                                    height: 56px;
+                                    vertical-alignment: bottom;
+                                }
+                                for row[i] in SettingsData.guide-rows: GuideRowView {
+                                    status: row;
+                                    shift(sign) => {
+                                        SettingsData.shift-guide(i, sign);
+                                    }
+                                    refresh => {
+                                        SettingsData.refresh-guide(i);
+                                    }
+                                }
+                                Text {
+                                    text: "Shift the times when a provider's guide is an hour or two off; the guide downloads again.";
+                                    color: Theme.text-3;
+                                    font-size: Theme.fs-sm;
+                                    wrap: word-wrap;
+                                    height: 40px;
+                                    vertical-alignment: bottom;
                                 }
                             }
                         }
@@ -367,12 +341,12 @@ export component SettingsScreen inherits Rectangle {
                         spacing: 22px;
                         alignment: start;
                         Hint {
-                            keys: ["Tab"];
-                            label: "Next field";
+                            keys: ["↑", "↓"];
+                            label: "Section";
                         }
                         Hint {
-                            keys: ["Enter"];
-                            label: "Save name";
+                            keys: ["Tab"];
+                            label: "Next field";
                         }
                         Hint {
                             keys: ["Esc"];

@@ -106,8 +106,9 @@ impl Store {
     ///
     /// Keeps only channels in `wanted` (lowercased ids) and programmes that
     /// overlap `keep`, so a guide for thousands of unused channels or weeks
-    /// ahead stays small. Returns the number of programmes stored. The old
-    /// programmes stay when parsing fails.
+    /// ahead stays small. Every time moves by `shift` seconds, for guides
+    /// that are off by an hour or two. Returns the number of programmes
+    /// stored. The old programmes stay when parsing fails.
     ///
     /// # Errors
     ///
@@ -118,6 +119,7 @@ impl Store {
         provider: &str,
         wanted: &HashSet<String>,
         keep: Range<i64>,
+        shift: i64,
         xml: impl BufRead,
         now: i64,
     ) -> Result<usize> {
@@ -141,7 +143,9 @@ impl Store {
             let mut index = tx
                 .prepare("INSERT INTO programme_search (rowid, title) VALUES (?1, ?2)")
                 .map_err(Error::Sql)?;
-            parse(xml, |channel, programme| {
+            parse(xml, |channel, mut programme| {
+                programme.start += shift;
+                programme.stop += shift;
                 let wanted = wanted.contains(&channel)
                     && programme.stop > keep.start
                     && programme.start < keep.end
@@ -396,7 +400,7 @@ mod tests {
         let wanted = HashSet::from(["atlas.nature".to_owned()]);
         let keep = NOW - 86_400..NOW + 7 * 86_400;
         let stored = store
-            .import("north", &wanted, keep, GUIDE.as_bytes(), NOW)
+            .import("north", &wanted, keep, 0, GUIDE.as_bytes(), NOW)
             .unwrap();
         assert_eq!(stored, 3);
         store
@@ -439,15 +443,16 @@ mod tests {
         let xml = r#"<tv><programme start="20261004210000 +0000" stop="20261004220000 +0000"
             channel="atlas.nature"><title>Replacement</title></programme></tv>"#;
         store
-            .import("north", &wanted, 0..i64::MAX, xml.as_bytes(), NOW + 1)
+            .import("north", &wanted, 0..i64::MAX, 3600, xml.as_bytes(), NOW + 1)
             .unwrap();
-        let titles: Vec<_> = store
-            .between("north", "atlas.nature", 0, i64::MAX)
-            .unwrap()
-            .into_iter()
-            .map(|p| p.title)
-            .collect();
+        let programmes = store.between("north", "atlas.nature", 0, i64::MAX).unwrap();
+        let titles: Vec<_> = programmes.iter().map(|p| p.title.as_str()).collect();
         assert_eq!(titles, ["Replacement"]);
+        assert_eq!(
+            programmes[0].start,
+            parse_time("20261004220000 +0000").unwrap(),
+            "shifted by an hour"
+        );
         assert!(
             store.search("meadow", NOW, 10).unwrap().is_empty(),
             "old titles leave the index"
@@ -468,7 +473,7 @@ mod tests {
         let wanted = HashSet::from(["atlas.nature".to_owned()]);
         let broken = "<tv><programme start=\"20261004210000\" stop=\"20261004220000\" channel=\"atlas.nature\"><title>X</tv>";
         assert!(matches!(
-            store.import("north", &wanted, 0..i64::MAX, broken.as_bytes(), NOW),
+            store.import("north", &wanted, 0..i64::MAX, 0, broken.as_bytes(), NOW),
             Err(Error::Xml(_))
         ));
         assert_eq!(

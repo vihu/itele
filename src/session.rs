@@ -14,6 +14,7 @@ mod guide;
 mod page;
 mod player;
 mod providers;
+mod refresh;
 mod search;
 mod series;
 mod settings;
@@ -29,6 +30,7 @@ use std::time::{Duration, Instant};
 use itele::epg::{Programme, Store};
 use itele::history::{Entry, History};
 use itele::provider::{Library, Paths, Provider};
+use itele::settings::Settings;
 use itele::xtream::{Credentials, LiveStream, Movie, Show};
 use mpv_engine::{EndReason, Engine, PlaybackEvent};
 use slint::{ComponentHandle, SharedString, Timer, TimerMode, VecModel};
@@ -39,7 +41,7 @@ use crate::logos::Logos;
 use crate::names::thousands;
 use crate::playback::{self, SEEK_STEP, VOLUME_STEP};
 use crate::tracks;
-use crate::ui::{AppWindow, ChannelItem, Screen};
+use crate::ui::{AppWindow, ChannelItem, Screen, SettingsData};
 
 /// Delay before the preview follows the selection, so holding Down does
 /// not open a stream per row.
@@ -60,6 +62,7 @@ thread_local! {
 pub struct Session {
     app: slint::Weak<AppWindow>,
     paths: Paths,
+    settings: RefCell<Settings>,
     engine: Arc<Engine>,
     state: RefCell<State>,
     logos: RefCell<Logos>,
@@ -81,6 +84,7 @@ pub struct Session {
     poll_timer: Timer,
     guide_timer: Timer,
     search_timer: Timer,
+    refresh_timer: Timer,
 }
 
 #[derive(Default)]
@@ -123,6 +127,8 @@ struct Slot {
     guide: String,
     movies: shelves::ShelfState,
     shows: shelves::ShelfState,
+    /// A refresh is running; another is not started meanwhile.
+    refreshing: bool,
     /// Results of work started for an earlier slot with the same provider
     /// (signed out since) carry another epoch and are dropped.
     epoch: u64,
@@ -177,9 +183,14 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
     let history = History::open(&paths.history_path())
         .inspect_err(|e| eprintln!("watch history: {e}"))
         .ok();
+    let settings = paths
+        .load_settings()
+        .inspect_err(|e| eprintln!("settings: {e}"))
+        .unwrap_or_default();
     let session = Rc::new(Session {
         app: app.as_weak(),
         paths,
+        settings: RefCell::new(settings),
         engine,
         state: RefCell::default(),
         logos: RefCell::new(logos),
@@ -194,6 +205,7 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
         poll_timer: Timer::default(),
         guide_timer: Timer::default(),
         search_timer: Timer::default(),
+        refresh_timer: Timer::default(),
     });
     SESSION.with(|s| *s.borrow_mut() = Some(Rc::clone(&session)));
 
@@ -245,18 +257,31 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
     app.on_details_restart(|| with_session(|s| s.details_play(Start::Beginning)));
     app.on_details_back(|| with_session(|s| s.details_back()));
     app.on_details_season_selected(|i| with_session(|s| s.details_season_selected(i)));
-    app.on_rename_provider(|i, name| with_session(|s| s.rename_provider(i, &name)));
+    let settings = app.global::<SettingsData>();
+    settings.set_version(env!("CARGO_PKG_VERSION").into());
+    settings.on_rename(|i, name| with_session(|s| s.rename_provider(i, &name)));
+    settings.on_refresh_provider(|i| {
+        with_session(|s| s.refresh_provider_at(i, refresh::Force::Yes));
+    });
+    settings.on_refresh_guide(|i| with_session(|s| s.refresh_provider_at(i, refresh::Force::No)));
+    settings.on_refresh_all(|| with_session(|s| s.refresh_all(refresh::Force::Yes)));
+    settings.on_shift_guide(|i, sign| with_session(|s| s.shift_guide(i, sign)));
+    settings.on_set_setting(|key, value| with_session(|s| s.set_setting(key, value)));
     app.on_open_tracks(|kind| with_session(|s| s.open_tracks(track_kind(kind))));
     app.on_choose_track(|kind, id| {
         with_session(|s| tracks::select(&s.engine, track_kind(kind), i64::from(id)));
     });
 
-    app.set_version(env!("CARGO_PKG_VERSION").into());
     session.open_saved();
     session
         .guide_timer
         .start(TimerMode::Repeated, GUIDE_TICK, || {
             with_session(|s| s.tick_guide());
+        });
+    session
+        .refresh_timer
+        .start(TimerMode::Repeated, refresh::CHECK_EVERY, || {
+            with_session(|s| s.refresh_all(refresh::Force::No));
         });
 }
 

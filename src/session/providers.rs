@@ -5,9 +5,11 @@ use std::thread;
 
 use itele::provider::{self, Library, Provider};
 use itele::xtream::{self, Action, Client, Credentials};
+
+use super::refresh::Force;
 use slint::{Image, ModelRc, SharedString, VecModel};
 
-use super::{Session, Slot, guide, host_of, initials, library_status, on_ui_thread};
+use super::{Session, Slot, host_of, initials, library_status, on_ui_thread};
 use crate::live::{Source, View};
 use crate::ui::{ProviderItem, Screen};
 use crate::vod::Shelves;
@@ -226,7 +228,7 @@ impl Session {
     /// its cached channels at once, and refreshes them in the background.
     fn open(&self, provider: Provider) {
         let cache = self.paths.cache(&provider);
-        let epoch = {
+        {
             let mut state = self.state.borrow_mut();
             state.next_epoch += 1;
             let epoch = state.next_epoch;
@@ -250,33 +252,11 @@ impl Session {
                 guide: String::new(),
                 movies: Default::default(),
                 shows: Default::default(),
+                refreshing: false,
                 epoch,
             });
-            epoch
-        };
-
-        let id = provider.id.clone();
-        let guide_path = self.paths.guide_path();
-        thread::spawn(move || {
-            let credentials = match provider.credentials() {
-                Ok(credentials) => credentials,
-                Err(e) => return on_ui_thread(move |s| s.refresh_failed(&id, epoch, &e)),
-            };
-            let client = Client::new(credentials.clone());
-            let ready_id = id.clone();
-            on_ui_thread(move |s| s.credentials_ready(&ready_id, epoch, credentials));
-            let result = Library::fetch(&client, &cache);
-            let wanted = result.as_ref().ok().map(guide::wanted_channels);
-            let library_id = id.clone();
-            on_ui_thread(move |s| match result {
-                Ok(library) => s.library_ready(&library_id, epoch, library),
-                Err(e) => s.refresh_failed(&library_id, epoch, &e),
-            });
-            if let Some(wanted) = wanted {
-                let imported = guide::refresh(&client, &guide_path, &id, &wanted);
-                on_ui_thread(move |s| s.guide_ready(&id, epoch, imported));
-            }
-        });
+        }
+        self.refresh_provider(&provider.id, Force::No, Force::No);
     }
 
     fn logged_in(&self, result: provider::Result<Provider>) {
@@ -301,7 +281,7 @@ impl Session {
         }
     }
 
-    fn credentials_ready(&self, id: &str, epoch: u64, credentials: Credentials) {
+    pub(super) fn credentials_ready(&self, id: &str, epoch: u64, credentials: Credentials) {
         {
             let mut state = self.state.borrow_mut();
             let Some(slot) = state
@@ -323,7 +303,7 @@ impl Session {
         }
     }
 
-    fn library_ready(&self, id: &str, epoch: u64, library: Library) {
+    pub(super) fn library_ready(&self, id: &str, epoch: u64, library: Library) {
         {
             let mut state = self.state.borrow_mut();
             let Some(slot) = state
@@ -344,7 +324,7 @@ impl Session {
         self.refresh_lists();
     }
 
-    fn refresh_failed(&self, id: &str, epoch: u64, error: &provider::Error) {
+    pub(super) fn refresh_failed(&self, id: &str, epoch: u64, error: &provider::Error) {
         {
             let mut state = self.state.borrow_mut();
             let Some(slot) = state
