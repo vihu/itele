@@ -21,6 +21,7 @@ impl Session {
         app.set_group_index(group as i32);
         app.set_group_title(state.catalog.group_name(group).into());
         let row_logos = state.catalog.row_logos(group);
+        let (row_provider, row_guide_ids) = state.catalog.row_guide_ids(group);
         let mut items = state.catalog.channel_items(group);
         {
             let logos = self.logos.borrow();
@@ -41,7 +42,11 @@ impl Session {
         state.group = group;
         state.channels = channels;
         state.row_logos = row_logos;
+        state.row_provider = row_provider;
+        state.row_guide_ids = row_guide_ids;
+        state.visible = 0..0;
         drop(state);
+        self.refresh_programme();
         self.rows_visible(row.map_or(0, |r| r as i32 - FIRST_ROWS / 2), FIRST_ROWS);
     }
 
@@ -49,10 +54,13 @@ impl Session {
     pub(super) fn rows_visible(&self, first: i32, count: i32) {
         let first = first.max(0) as usize;
         let urls: Vec<String> = {
-            let state = self.state.borrow();
+            let mut state = self.state.borrow_mut();
             let end = (first + count.max(0) as usize).min(state.row_logos.len());
+            state.visible = first.min(end)..end;
             state.row_logos.get(first..end).unwrap_or_default().to_vec()
         };
+        let visible = self.state.borrow().visible.clone();
+        self.fill_guide(visible);
         for url in urls {
             if self.logos.borrow_mut().request(&url) {
                 // Already on disk: loaded now.
@@ -92,6 +100,7 @@ impl Session {
             return;
         };
         app.set_channel_index(row);
+        self.refresh_programme();
         self.select_timer
             .start(TimerMode::SingleShot, SELECT_DELAY, || {
                 with_session(|s| s.play_selected());

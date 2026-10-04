@@ -155,6 +155,27 @@ impl Catalog {
         Some((source, source.library.streams.get(*g.channels.get(row)?)?))
     }
 
+    /// The provider of `group` and each row's XMLTV channel id, lowercased
+    /// (empty when the channel has none).
+    pub fn row_guide_ids(&self, group: usize) -> (String, Vec<String>) {
+        let Some(g) = self.groups.get(group) else {
+            return (String::new(), Vec::new());
+        };
+        let source = &self.sources[g.source];
+        let ids = g
+            .channels
+            .iter()
+            .map(|&i| {
+                source.library.streams[i]
+                    .epg_channel_id
+                    .as_deref()
+                    .unwrap_or("")
+                    .to_lowercase()
+            })
+            .collect();
+        (source.id.clone(), ids)
+    }
+
     /// Each row's logo URL in `group`, empty when the provider has none.
     pub fn row_logos(&self, group: usize) -> Vec<String> {
         let Some(g) = self.groups.get(group) else {
@@ -243,6 +264,10 @@ fn channel_item(source: &Source, stream: &LiveStream, row: usize, provider: &str
             1 => "Catch-up 1 day".into(),
             days => format!("Catch-up {days} days").into(),
         },
+        now_title: SharedString::new(),
+        now_progress: -1.0,
+        next_time: SharedString::new(),
+        next_title: SharedString::new(),
     }
 }
 

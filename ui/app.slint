@@ -4,10 +4,10 @@ import "fonts/SchibstedGrotesk.ttf";
 import { Theme } from "theme.slint";
 import { Button, ButtonKind } from "atoms.slint";
 import { LoginScreen } from "login.slint";
-import { ChannelItem, GroupItem, LiveTvScreen } from "live-tv.slint";
+import { ChannelItem, GroupItem, LiveTvScreen, ProgrammeInfo, UpcomingItem } from "live-tv.slint";
 import { InfoLine, InfoPair, PlayerScreen, PlayerState } from "player.slint";
 
-export { ChannelItem, GroupItem, InfoLine, InfoPair, PlayerState }
+export { ChannelItem, GroupItem, InfoLine, InfoPair, PlayerState, ProgrammeInfo, UpcomingItem }
 
 export enum Screen { login, live, player }
 
@@ -93,6 +93,8 @@ export component AppWindow inherits Window {
     in property <string> video-note;
     in property <bool> banner-visible: true;
     in property <PlayerState> player;
+    in property <ProgrammeInfo> programme;
+    in property <[UpcomingItem]> upcoming;
     in-out property <bool> info-visible;
     in property <[InfoLine]> info;
     out property <length> video-width: screen == Screen.player ? root.width : live.video-width;
@@ -192,6 +194,8 @@ export component AppWindow inherits Window {
             avatar: root.avatar;
             frame: root.screen == Screen.live ? root.frame : @image-url("");
             video-note: root.video-note;
+            programme: root.programme;
+            upcoming: root.upcoming;
             group-selected(i) => {
                 root.select-group(i);
                 live-keys.focus();
@@ -275,6 +279,7 @@ export component AppWindow inherits Window {
         PlayerScreen {
             frame: root.screen == Screen.player ? root.frame : @image-url("");
             channel: root.current;
+            programme: root.programme;
             state: root.player;
             video-note: root.video-note;
             banner-visible: root.banner-visible;

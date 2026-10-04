@@ -94,6 +94,7 @@ impl Session {
         }
         let row = (app.get_channel_index() + delta).rem_euclid(len as i32);
         app.set_channel_index(row);
+        self.refresh_programme();
         self.play_selected();
         self.show_banner();
     }

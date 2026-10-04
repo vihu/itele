@@ -20,7 +20,7 @@ use itele::epg::Store;
 use itele::provider::{Library, Paths, Provider};
 use itele::xtream::{Credentials, LiveStream};
 use mpv_engine::{EndReason, Engine, PlaybackEvent};
-use slint::{ComponentHandle, SharedString, Timer, VecModel};
+use slint::{ComponentHandle, SharedString, Timer, TimerMode, VecModel};
 
 use crate::live::{Catalog, View, thousands};
 use crate::logos::Logos;
@@ -34,6 +34,9 @@ const SELECT_DELAY: Duration = Duration::from_millis(300);
 const BANNER_TIME: Duration = Duration::from_secs(4);
 /// How often the player banner rereads mpv while it is showing.
 const POLL_INTERVAL: Duration = Duration::from_millis(250);
+/// How often now and next are read again, so progress moves and
+/// programmes roll over.
+const GUIDE_TICK: Duration = Duration::from_secs(30);
 
 thread_local! {
     static SESSION: RefCell<Option<Rc<Session>>> = const { RefCell::new(None) };
@@ -53,6 +56,7 @@ pub struct Session {
     banner_timer: Timer,
     banner_until: Cell<Instant>,
     poll_timer: Timer,
+    guide_timer: Timer,
 }
 
 #[derive(Default)]
@@ -64,6 +68,12 @@ struct State {
     channels: Rc<VecModel<ChannelItem>>,
     /// Each row's logo URL, empty when the provider has none.
     row_logos: Vec<String>,
+    /// The provider of the listed group.
+    row_provider: String,
+    /// Each row's XMLTV channel id, lowercased; empty without one.
+    row_guide_ids: Vec<String>,
+    /// Rows the channel list last reported on screen.
+    visible: std::ops::Range<usize>,
     playing: Option<Playing>,
     /// Source of [`Slot::epoch`] values.
     next_epoch: u64,
@@ -107,6 +117,7 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
         banner_timer: Timer::default(),
         banner_until: Cell::new(Instant::now()),
         poll_timer: Timer::default(),
+        guide_timer: Timer::default(),
     });
     SESSION.with(|s| *s.borrow_mut() = Some(Rc::clone(&session)));
 
@@ -141,6 +152,11 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
     app.on_cycle_subtitles(|| with_session(|s| playback::next_subtitles(&s.engine)));
 
     session.open_saved();
+    session
+        .guide_timer
+        .start(TimerMode::Repeated, GUIDE_TICK, || {
+            with_session(|s| s.tick_guide());
+        });
 }
 
 /// Runs `f` with the session, if the window still has one.

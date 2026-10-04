@@ -4,7 +4,7 @@
 
 import { Theme } from "theme.slint";
 import { Button, ButtonKind, ChannelLogo, LiveMarker, Tag } from "atoms.slint";
-import { ChannelItem } from "live-tv.slint";
+import { ChannelItem, ProgrammeInfo } from "live-tv.slint";
 
 export struct PlayerState {
     paused: bool,
@@ -110,6 +110,7 @@ component Track inherits Rectangle {
 export component PlayerScreen inherits Rectangle {
     in property <image> frame;
     in property <ChannelItem> channel;
+    in property <ProgrammeInfo> programme;
     in property <PlayerState> state;
     in property <string> video-note;
     in property <bool> banner-visible;
@@ -263,17 +264,20 @@ export component PlayerScreen inherits Rectangle {
                     }
                 }
                 Text {
-                    text: root.channel.name;
+                    text: root.programme.title != "" ? root.programme.title : root.channel.name;
                     color: Theme.text;
                     font-size: 34px;
                     font-weight: 800;
                     overflow: elide;
                 }
                 Text {
-                    text: root.channel.group;
+                    text: root.programme.title != ""
+                        ? root.channel.name + "  ·  " + root.programme.time + "  ·  " + root.programme.left
+                        : root.channel.group;
                     color: Theme.text-2;
                     font-size: Theme.fs-md;
                     font-weight: 500;
+                    overflow: elide;
                 }
             }
 
