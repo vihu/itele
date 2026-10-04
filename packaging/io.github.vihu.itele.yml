@@ -135,8 +135,8 @@ modules:
       env:
         CARGO_HOME: /run/build/itele/cargo
     build-commands:
-      - cargo build --release --locked
-      - install -Dm755 target/release/itele -t /app/bin
+      - cargo build --profile dist --locked
+      - install -Dm755 target/dist/itele -t /app/bin
       - install -Dm644 packaging/io.github.vihu.itele.desktop -t /app/share/applications
       - install -Dm644 packaging/io.github.vihu.itele.svg -t /app/share/icons/hicolor/scalable/apps
       - install -Dm644 packaging/io.github.vihu.itele.metainfo.xml -t /app/share/metainfo

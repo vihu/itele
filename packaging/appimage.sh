@@ -54,12 +54,12 @@ fetch "$tool" "https://github.com/AppImage/appimagetool/releases/download/$tool_
 fetch "$runtime" "https://github.com/AppImage/type2-runtime/releases/download/$runtime_version/runtime-$arch" "$runtime_sha256"
 chmod +x "$deploy" "$tool"
 
-cargo build --release --locked
+cargo build --profile dist --locked
 
 appdir=$(mktemp -d)/itele.AppDir
 # Extract-and-run: build machines (CI runners, containers) often lack FUSE.
 APPIMAGE_EXTRACT_AND_RUN=1 "$deploy" --appdir "$appdir" \
-  --executable target/release/itele \
+  --executable target/dist/itele \
   --desktop-file "packaging/$id.desktop" \
   --icon-file "packaging/$id.svg"
 # appimagetool looks for the metainfo under its older name.

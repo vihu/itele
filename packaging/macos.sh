@@ -27,12 +27,12 @@ build() {
   local arch work app iconset size
   arch=$(uname -m)
   export MACOSX_DEPLOYMENT_TARGET=11.0
-  cargo build --release --locked
+  cargo build --profile dist --locked
 
   work=$(mktemp -d)
   app=$work/itele.app
   mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$app/Contents/Frameworks"
-  cp target/release/itele "$app/Contents/MacOS/itele"
+  cp target/dist/itele "$app/Contents/MacOS/itele"
   dylibbundler -od -b -cd \
     -x "$app/Contents/MacOS/itele" \
     -d "$app/Contents/Frameworks/" \

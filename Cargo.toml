@@ -41,3 +41,12 @@ tempfile = "3.27.0"
 
 [build-dependencies]
 slint-build = "1.18.1"
+
+# The builds in packaging/: link-time optimization and stripped symbols
+# take the binary from 60 to 36 MB, for a build twice as long.
+# `cargo build --release` stays quick for development.
+[profile.dist]
+codegen-units = 1
+inherits      = "release"
+lto           = "fat"
+strip         = true
