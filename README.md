@@ -1,9 +1,9 @@
 # itele
 
 A native IPTV player for Linux and macOS with Xtream Codes support. Sign in
-to one provider or several, browse their channels side by side, read the
-guide, search it, and watch, all in one window that starts fast and stays
-light.
+to one provider or several, browse their channels, movies and series side
+by side, read the guide, search it all, and watch, in one window that
+starts fast and stays light.
 
 ## Design
 
@@ -15,11 +15,13 @@ light.
   them together, with search and the guide always across every provider.
 - The guide is stored locally (SQLite with full-text search), so scrolling
   and searching it never waits on the network.
+- Posters are decoded and scaled off the UI thread, and only those near the
+  screen are kept, so scrolling a 20,000-title catalog keeps memory flat.
 - Passwords live in the system keychain (Secret Service or KWallet on Linux,
   Keychain on macOS), never in a file or a log.
 
 Status: 0.1.0, not released. Targets Linux (Wayland) and macOS. Live TV, the
-guide, search and catch-up work; Home, movies, series and favourites are
+guide, search, catch-up, movies and series work; Home and favourites are
 next.
 
 ## What it does
@@ -30,8 +32,13 @@ next.
   with every group tagged by its provider.
 - TV guide: a grid of channels against time, 8 days back to 8 days ahead,
   refreshed every 12 hours from each provider's XMLTV.
-- Search: channels by name and programmes by title, across all providers,
-  with what is live and what can be replayed marked.
+- Movies and Series: poster grids with the same groups and provider
+  switcher, and a page per title with plot, cast and rating; a series' page
+  lists its seasons and episodes.
+- Resume: movies and episodes continue where they stopped, progress shows
+  on posters and episodes, and the next episode plays when one ends.
+- Search: channels, movies and series by name and programmes by title,
+  across all providers, with what is live and what can be replayed marked.
 - Catch-up: Enter on an ended programme replays it from the provider's
   archive, when the channel has one.
 - Player: pause and rewind within live, Go Live, seek, audio and subtitle
@@ -49,18 +56,21 @@ cargo run --release
 
 The first run asks for a provider's server, username and password. Add more
 from Settings in the rail. Settings are kept in the platform config
-directory, lists and the guide in its cache directory.
+directory, the watch history in its data directory, and lists, posters and
+the guide in its cache directory.
 
 Without an account, `tools/fake-provider.py` serves a fake provider with
-groups, logos, a guide and catch-up, streaming local video files as live
-channels:
+groups, logos, a guide, catch-up, movies and series, playing local video
+files as channels and titles:
 
 ```bash
 python3 tools/fake-provider.py --media clip1.ts clip2.mp4
 ```
 
 Then sign in to `http://127.0.0.1:8089` as `demo` / `demo`. Start a second
-one with `--port 8090 --prefix "B "` to try several providers.
+one with `--port 8090 --prefix "B "` to try several providers;
+`--movies 20000` tries a large catalog and `--posters DIR` uses your own
+images as posters.
 
 ## Keys
 
@@ -69,17 +79,23 @@ one with `--port 8090 --prefix "B "` to try several providers.
 | Live TV | `↑` `↓` channel, `←` `→` group, `Enter` watch, `P` next provider      |
 | Live TV | `G` guide, `/` or `Ctrl+K` search                                     |
 | Guide   | arrows move, `PgUp` `PgDn` page, `N` now, `Enter` watch, `Esc` back   |
-| Search  | type to search, `↑` `↓` choose, `Enter` watch or replay, `Esc` back   |
+| Search  | type to search, `↑` `↓` choose, `Enter` watch or open, `Esc` back     |
+| Movies  | arrows move, `←` from the first column to the groups, `Enter` open    |
+| Page    | `Enter` play or resume, `B` from the beginning, `Esc` back            |
+| Page    | on a series: `↑` `↓` episode, `←` `→` season                          |
 | Player  | `Space` pause, `←` `→` seek 10 s, `L` go live, `↑` `↓` change channel |
 | Player  | `M` mute, `+` `-` volume, `A` audio, `S` subtitles, `F` fullscreen    |
 | Player  | `I` stream info, `Esc` or `Backspace` back                            |
 
+Series work like Movies. On a movie or an episode the player has no Go live
+or channel keys.
+
 ## How it is checked
 
-- Unit tests for the Xtream client (lenient parsing of real-world account
-  and stream JSON, URL building, catch-up times in the server's time zone),
-  the XMLTV parser, the guide store (import, now and next, search) and the
-  provider settings and cache.
+- Unit tests for the Xtream client (lenient parsing of real-world account,
+  stream, movie and series JSON, URL building, catch-up times in the
+  server's time zone), the XMLTV parser, the guide store (import, now and
+  next, search), the watch history, and the provider settings and cache.
 - `cargo deny check licenses` keeps every Rust dependency compatible with
   the GPL.
 - Each change is also run against the fake provider, end to end.
