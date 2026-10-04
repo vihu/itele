@@ -256,3 +256,11 @@ export struct GuideStatus {
     // The time shift, for example "+1 h".
     shift: string,
 }
+
+// A place itele keeps files, in Settings' About section.
+export struct StorageRow {
+    label: string,
+    path: string,
+    // For example "1.3 GB"; empty while it is measured.
+    size: string,
+}

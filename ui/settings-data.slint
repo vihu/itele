@@ -1,7 +1,7 @@
 // What the Settings screen shows and what it asks for, shared by its
 // panels.
 
-import { GuideStatus, ProviderDetails, SettingKey, SettingValues } from "models.slint";
+import { GuideStatus, ProviderDetails, SettingKey, SettingValues, StorageRow } from "models.slint";
 
 // What the Settings screen shows and what it asks for; the Rust side
 // fills and answers it.
@@ -13,10 +13,18 @@ export global SettingsData {
     // The language choices, in the order of the values' indexes.
     in property <[string]> audio-languages;
     in property <[string]> subtitle-languages;
+    // The About section: what plays the video, and where files are kept.
+    in property <string> player;
+    in property <string> video;
+    in property <[StorageRow]> storage;
+    // The cache is being cleared.
+    in property <bool> clearing;
     callback rename(int, string);
     callback refresh-provider(int);
     callback refresh-guide(int);
     callback refresh-all();
     callback shift-guide(int, int);
     callback set-setting(SettingKey, int);
+    callback measure-storage();
+    callback clear-cache();
 }

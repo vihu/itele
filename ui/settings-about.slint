@@ -1,0 +1,125 @@
+// The About section of Settings: the version and licence, what plays the
+// video, and where itele keeps its files, with Clear cache.
+
+import { Theme } from "theme.slint";
+import { Button, ButtonKind } from "atoms.slint";
+import { StorageRow } from "models.slint";
+import { SettingRow } from "settings-controls.slint";
+import { SettingsData } from "settings-data.slint";
+
+component GroupTitle inherits Text {
+    color: Theme.text-3;
+    font-size: Theme.fs-sm;
+    font-weight: 700;
+    height: 52px;
+    vertical-alignment: bottom;
+}
+
+export component AboutPanel inherits VerticalLayout {
+    // Clear cache asks once more before it deletes anything.
+    property <bool> confirming;
+    HorizontalLayout {
+        alignment: start;
+        spacing: 14px;
+        HorizontalLayout {
+            Text {
+                text: "itele";
+                color: Theme.text;
+                font-size: 40px;
+                font-weight: 800;
+            }
+            Text {
+                text: ".";
+                color: Theme.accent;
+                font-size: 40px;
+                font-weight: 800;
+            }
+        }
+        Text {
+            text: SettingsData.version;
+            color: Theme.text-2;
+            font-size: Theme.fs-md;
+            font-weight: 600;
+            vertical-alignment: center;
+        }
+    }
+    Text {
+        text: "A native IPTV player for Linux and macOS. Free software under the GPL, version 3 or later.";
+        color: Theme.text-2;
+        font-size: Theme.fs-md;
+        wrap: word-wrap;
+    }
+    GroupTitle {
+        text: "Under the hood";
+    }
+    SettingRow {
+        title: "Player";
+        description: SettingsData.player;
+    }
+    SettingRow {
+        title: "Video";
+        description: SettingsData.video;
+    }
+    GroupTitle {
+        text: "Storage";
+    }
+    for row in SettingsData.storage: HorizontalLayout {
+        padding-top: 8px;
+        padding-bottom: 8px;
+        spacing: 20px;
+        Text {
+            width: 120px;
+            text: row.label;
+            color: Theme.text-3;
+            font-size: Theme.fs-sm;
+            font-weight: 600;
+        }
+        Text {
+            text: row.path;
+            color: Theme.text-2;
+            font-size: Theme.fs-sm;
+            overflow: elide;
+            horizontal-stretch: 1;
+        }
+        Text {
+            text: row.size;
+            color: Theme.text-3;
+            font-size: Theme.fs-sm;
+            horizontal-alignment: right;
+        }
+    }
+    HorizontalLayout {
+        padding-top: 18px;
+        spacing: 14px;
+        alignment: start;
+        Button {
+            kind: root.confirming ? ButtonKind.danger : ButtonKind.secondary;
+            text: SettingsData.clearing ? "Clearing…" : root.confirming ? "Click again to clear" : "Clear cache";
+            enabled: !SettingsData.clearing;
+            clicked => {
+                if (root.confirming) {
+                    root.confirming = false;
+                    SettingsData.clear-cache();
+                } else {
+                    root.confirming = true;
+                }
+            }
+        }
+        Text {
+            text: "Lists, posters and the guide download again; the watch history and settings stay.";
+            color: Theme.text-3;
+            font-size: Theme.fs-sm;
+            vertical-alignment: center;
+            wrap: word-wrap;
+            horizontal-stretch: 1;
+        }
+    }
+    // The question lapses after a few seconds.
+    Timer {
+        interval: 4s;
+        running: root.confirming;
+        triggered => {
+            root.confirming = false;
+        }
+    }
+}

@@ -184,6 +184,52 @@ impl Paths {
         write_atomic(&self.config.join(SETTINGS_FILE), &json)
     }
 
+    /// The settings directory.
+    pub fn config_dir(&self) -> &Utf8Path {
+        &self.config
+    }
+
+    /// The data directory, which holds the watch history.
+    pub fn data_dir(&self) -> &Utf8Path {
+        &self.data
+    }
+
+    /// The cache directory: lists, posters, logos and the guide.
+    pub fn cache_dir(&self) -> &Utf8Path {
+        &self.cache
+    }
+
+    /// Deletes everything in the cache directory but the guide store,
+    /// which stays open while itele runs (empty it through the store).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] when something cannot be deleted.
+    pub fn clear_cache(&self) -> Result {
+        let entries = match fs::read_dir(&self.cache) {
+            Ok(entries) => entries,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
+            Err(e) => return Err(Error::Io(self.cache.clone(), e)),
+        };
+        let guide = self.guide_path();
+        for entry in entries {
+            let entry = entry.map_err(|e| Error::Io(self.cache.clone(), e))?;
+            let Ok(path) = Utf8PathBuf::from_path_buf(entry.path()) else {
+                continue;
+            };
+            if path.as_str().starts_with(guide.as_str()) {
+                continue;
+            }
+            let removed = if path.is_dir() {
+                fs::remove_dir_all(&path)
+            } else {
+                fs::remove_file(&path)
+            };
+            removed.map_err(|e| Error::Io(path, e))?;
+        }
+        Ok(())
+    }
+
     /// The watch history store, shared by all providers. It is data, not
     /// cache: clearing the cache keeps it.
     pub fn history_path(&self) -> Utf8PathBuf {
@@ -407,6 +453,26 @@ mod tests {
         )
         .unwrap();
         assert_eq!(paths.load_providers().unwrap()[0].guide_shift, 0);
+    }
+
+    #[test]
+    fn clear_cache_keeps_the_guide_and_the_rest_of_the_data() {
+        let (_dir, paths) = temp_paths();
+        paths.clear_cache().unwrap();
+        let cache = paths.cache(&provider());
+        cache.write(Action::LiveCategories, CATEGORIES).unwrap();
+        fs::create_dir_all(paths.art_dir()).unwrap();
+        fs::write(paths.art_dir().join("x.png"), b"x").unwrap();
+        fs::write(paths.guide_path(), b"guide").unwrap();
+        fs::write(paths.guide_path().with_extension("sqlite-wal"), b"wal").unwrap();
+        paths.save_settings(&Settings::default()).unwrap();
+
+        paths.clear_cache().unwrap();
+        assert!(cache.read(Action::LiveCategories).is_none());
+        assert!(!paths.art_dir().exists());
+        assert!(paths.guide_path().exists());
+        assert!(paths.guide_path().with_extension("sqlite-wal").exists());
+        assert_eq!(paths.load_settings().unwrap(), Settings::default());
     }
 
     #[test]

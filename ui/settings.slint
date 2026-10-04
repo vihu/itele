@@ -11,12 +11,19 @@ import { ProviderBlock } from "settings-providers.slint";
 import { SettingsData } from "settings-data.slint";
 import { GuidePanel } from "settings-guide.slint";
 import { InterfacePanel, PlaybackPanel } from "settings-playback.slint";
+import { AboutPanel } from "settings-about.slint";
 
 export { Fact, GuideStatus, ProviderDetails, SettingKey, SettingValues, SettingsData }
 
 export component SettingsScreen inherits Rectangle {
-    // The section showing: 0 providers, 1 guide, 2 playback, 3 interface.
+    // The section showing: 0 providers, 1 guide, 2 playback, 3 interface,
+    // 4 about.
     in-out property <int> section;
+    changed section => {
+        if (root.section == 4) {
+            SettingsData.measure-storage();
+        }
+    }
     callback sign-out(int);
     callback add-provider();
     callback navigate(int);
@@ -34,7 +41,7 @@ export component SettingsScreen inherits Rectangle {
             } else if (event.text == Key.UpArrow) {
                 root.section = max(0, root.section - 1);
             } else if (event.text == Key.DownArrow) {
-                root.section = min(3, root.section + 1);
+                root.section = min(4, root.section + 1);
             } else if (key == "g") {
                 root.navigate(2);
             } else if (event.text == "/" || (event.modifiers.control && key == "k")) {
@@ -117,6 +124,15 @@ export component SettingsScreen inherits Rectangle {
                                     keys.focus();
                                 }
                             }
+                            SectionItem {
+                                icon: @image-url("icons/info.svg");
+                                text: "About";
+                                selected: root.section == 4;
+                                clicked => {
+                                    root.section = 4;
+                                    keys.focus();
+                                }
+                            }
                         }
                         Rectangle {
                             x: parent.width - 1px;
@@ -166,6 +182,9 @@ export component SettingsScreen inherits Rectangle {
                                 max-width: 820px;
                             }
                             if root.section == 3: InterfacePanel {
+                                max-width: 820px;
+                            }
+                            if root.section == 4: AboutPanel {
                                 max-width: 820px;
                             }
                         }

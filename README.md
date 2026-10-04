@@ -21,8 +21,8 @@ starts fast and stays light.
   Keychain on macOS), never in a file or a log.
 
 Status: 0.1.0, not released. Targets Linux (Wayland) and macOS. Live TV, the
-guide, search, catch-up, movies and series work; Home and favourites are
-next.
+guide, search, catch-up, movies, series and settings work; Home and
+favourites are next.
 
 ## What it does
 
@@ -30,8 +30,8 @@ next.
   next, and a preview of the selected channel.
 - Provider switcher: one provider's groups at a time, or "All providers"
   with every group tagged by its provider.
-- TV guide: a grid of channels against time, 8 days back to 8 days ahead,
-  refreshed every 12 hours from each provider's XMLTV.
+- TV guide: a grid of channels against time, from each provider's XMLTV,
+  kept fresh in the background while itele runs.
 - Movies and Series: poster grids with the same groups and provider
   switcher, and a page per title with plot, cast and rating; a series' page
   lists its seasons and episodes.
@@ -41,9 +41,13 @@ next.
   across all providers, with what is live and what can be replayed marked.
 - Catch-up: Enter on an ended programme replays it from the provider's
   archive, when the channel has one.
-- Player: pause and rewind within live, Go Live, seek, audio and subtitle
-  tracks, and an `i` overlay with stream, video and audio details in the
-  style of mpv's stats.
+- Player: pause and rewind within live, Go Live, seek, menus for the audio
+  and subtitle tracks, and an `i` overlay with stream, video and audio
+  details in the style of mpv's stats.
+- Settings: providers with names of your choosing, how often guides and
+  lists refresh, a time shift for guides that are off, hardware decoding,
+  preferred audio and subtitle languages, the live stream format and
+  rewind buffer, the sidebar, the start screen and the clock.
 
 ## Running it
 
@@ -77,14 +81,15 @@ images as posters.
 | Where   | Keys                                                                  |
 | ------- | --------------------------------------------------------------------- |
 | Live TV | `↑` `↓` channel, `←` `→` group, `Enter` watch, `P` next provider      |
-| Live TV | `G` guide, `/` or `Ctrl+K` search                                     |
+| Live TV | `G` guide, `/` or `Ctrl+K` search, `Ctrl+B` sidebar (anywhere)        |
 | Guide   | arrows move, `PgUp` `PgDn` page, `N` now, `Enter` watch, `Esc` back   |
 | Search  | type to search, `↑` `↓` choose, `Enter` watch or open, `Esc` back     |
 | Movies  | arrows move, `←` from the first column to the groups, `Enter` open    |
 | Page    | `Enter` play or resume, `B` from the beginning, `Esc` back            |
 | Page    | on a series: `↑` `↓` episode, `←` `→` season                          |
 | Player  | `Space` pause, `←` `→` seek 10 s, `L` go live, `↑` `↓` change channel |
-| Player  | `M` mute, `+` `-` volume, `A` audio, `S` subtitles, `F` fullscreen    |
+| Player  | `M` mute, `+` `-` volume, `A` audio menu, `S` subtitles menu          |
+| Player  | `F` fullscreen; in a menu `↑` `↓` choose, `Enter` pick, `Esc` close   |
 | Player  | `I` stream info, `Esc` or `Backspace` back                            |
 
 Series work like Movies. On a movie or an episode the player has no Go live
@@ -95,7 +100,8 @@ or channel keys.
 - Unit tests for the Xtream client (lenient parsing of real-world account,
   stream, movie and series JSON, URL building, catch-up times in the
   server's time zone), the XMLTV parser, the guide store (import, now and
-  next, search), the watch history, and the provider settings and cache.
+  next, search), the watch history, the settings, and the provider
+  settings and cache.
 - `cargo deny check licenses` keeps every Rust dependency compatible with
   the GPL.
 - Each change is also run against the fake provider, end to end.

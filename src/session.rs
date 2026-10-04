@@ -6,11 +6,13 @@
 //! `slint::invoke_from_event_loop`. Stream URLs carry the password, so none
 //! is ever logged or shown.
 
+mod about;
 mod browse;
 mod catchup;
 mod details;
 mod grid;
 mod guide;
+mod navigate;
 mod page;
 mod player;
 mod preferences;
@@ -261,6 +263,7 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
     app.global::<Shell>()
         .on_toggle_sidebar(|| with_session(|s| s.toggle_sidebar()));
     session.apply_preferences();
+    session.fill_about();
     let settings = app.global::<SettingsData>();
     settings.set_version(env!("CARGO_PKG_VERSION").into());
     settings.on_rename(|i, name| with_session(|s| s.rename_provider(i, &name)));
@@ -271,6 +274,8 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
     settings.on_refresh_all(|| with_session(|s| s.refresh_all(refresh::Force::Yes)));
     settings.on_shift_guide(|i, sign| with_session(|s| s.shift_guide(i, sign)));
     settings.on_set_setting(|key, value| with_session(|s| s.set_setting(key, value)));
+    settings.on_measure_storage(|| with_session(|s| s.measure_storage()));
+    settings.on_clear_cache(|| with_session(|s| s.clear_cache()));
     app.on_open_tracks(|kind| with_session(|s| s.open_tracks(track_kind(kind))));
     app.on_choose_track(|kind, id| {
         with_session(|s| tracks::select(&s.engine, track_kind(kind), i64::from(id)));

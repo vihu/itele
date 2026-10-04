@@ -309,7 +309,8 @@ export component LiveTvScreen inherits Rectangle {
                                 HorizontalLayout {
                                     spacing: 14px;
                                     Text {
-                                        width: 44px;
+                                        // Room for "12:30 PM".
+                                        width: 66px;
                                         text: next.time;
                                         color: Theme.text-3;
                                         font-size: Theme.fs-sm;
