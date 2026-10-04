@@ -5,9 +5,9 @@ import { Theme } from "theme.slint";
 import { Button, ButtonKind } from "atoms.slint";
 import { LoginScreen } from "login.slint";
 import { ChannelItem, GroupItem, LiveTvScreen } from "live-tv.slint";
-import { PlayerScreen, PlayerState } from "player.slint";
+import { InfoLine, InfoPair, PlayerScreen, PlayerState } from "player.slint";
 
-export { ChannelItem, GroupItem, PlayerState }
+export { ChannelItem, GroupItem, InfoLine, InfoPair, PlayerState }
 
 export enum Screen { login, live, player }
 
@@ -41,6 +41,8 @@ export component AppWindow inherits Window {
     in property <string> video-note;
     in property <bool> banner-visible: true;
     in property <PlayerState> player;
+    in-out property <bool> info-visible;
+    in property <[InfoLine]> info;
     out property <length> video-width: screen == Screen.player ? root.width : live.video-width;
     out property <length> video-height: screen == Screen.player ? root.height : live.video-height;
     callback watch();
@@ -49,9 +51,11 @@ export component AppWindow inherits Window {
     callback show-banner();
     callback toggle-pause();
     callback seek(float);
+    callback seek-to(float);
     callback go-live();
     callback toggle-mute();
     callback change-volume(float);
+    callback set-volume(float);
     callback cycle-audio();
     callback cycle-subtitles();
     callback toggle-fullscreen();
@@ -179,6 +183,10 @@ export component AppWindow inherits Window {
                 root.cycle-subtitles();
             } else if (key == "f") {
                 root.toggle-fullscreen();
+            } else if (key == "i") {
+                root.info-visible = !root.info-visible;
+            } else if (event.text == Key.Escape && root.info-visible) {
+                root.info-visible = false;
             } else if (event.text == Key.Escape) {
                 root.escape();
             } else if (event.text == Key.Backspace) {
@@ -209,6 +217,8 @@ export component AppWindow inherits Window {
             state: root.player;
             video-note: root.video-note;
             banner-visible: root.banner-visible;
+            info-visible: root.info-visible;
+            info: root.info;
             back => {
                 root.back();
             }
@@ -218,6 +228,18 @@ export component AppWindow inherits Window {
             }
             seek(seconds) => {
                 root.seek(seconds);
+                root.show-banner();
+            }
+            seek-to(fraction) => {
+                root.seek-to(fraction);
+                root.show-banner();
+            }
+            set-volume(percent) => {
+                root.set-volume(percent);
+                root.show-banner();
+            }
+            toggle-info => {
+                root.info-visible = !root.info-visible;
                 root.show-banner();
             }
             go-live => {

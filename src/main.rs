@@ -5,6 +5,7 @@
 
 #![deny(unsafe_code, missing_docs, rustdoc::broken_intra_doc_links)]
 
+mod info;
 mod live;
 mod playback;
 mod session;

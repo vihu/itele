@@ -25,13 +25,12 @@ pub fn read(engine: &Engine, fullscreen: bool) -> PlayerState {
         .get_property::<String>("demuxer-cache-state")
         .ok()
         .and_then(|json| cache_window(&json));
-    let (behind, position, span) = match (engine.position(), window) {
+    let (behind, position) = match (engine.position(), window) {
         (Some(pos), Some((start, end))) if end > start => (
             (end - pos).max(0.0),
             ((pos - start) / (end - start)).clamp(0.0, 1.0),
-            end - start,
         ),
-        _ => (0.0, 1.0, 0.0),
+        _ => (0.0, 1.0),
     };
     let tracks = engine
         .get_property::<String>("track-list")
@@ -46,11 +45,6 @@ pub fn read(engine: &Engine, fullscreen: bool) -> PlayerState {
             SharedString::new()
         },
         position: position as f32,
-        window: if span > LIVE_SLACK {
-            clock(span).into()
-        } else {
-            SharedString::new()
-        },
         audio: track_label(&tracks, "audio").into(),
         subtitles: track_label(&tracks, "sub").into(),
         fullscreen,
@@ -66,6 +60,29 @@ pub fn toggle_pause(engine: &Engine) {
 /// Jumps `seconds` within the cached window (negative is back).
 pub fn seek(engine: &Engine, seconds: f64) {
     report("seek", engine.seek_relative(seconds));
+}
+
+/// Jumps to `fraction` (0 to 1) of the cached window.
+pub fn seek_to(engine: &Engine, fraction: f32) {
+    let window = engine
+        .get_property::<String>("demuxer-cache-state")
+        .ok()
+        .and_then(|json| cache_window(&json));
+    if let Some((start, end)) = window {
+        let target = start + (end - start) * f64::from(fraction.clamp(0.0, 1.0));
+        report("seek", engine.seek_absolute(target));
+    }
+}
+
+/// Sets the volume to `percent`, unmuting.
+pub fn set_volume(engine: &Engine, percent: f32) {
+    report(
+        "volume",
+        engine.set_volume(f64::from(percent).clamp(0.0, VOLUME_MAX)),
+    );
+    if engine.is_muted() {
+        report("unmute", engine.set_muted(false));
+    }
 }
 
 /// Mutes or unmutes.

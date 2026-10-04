@@ -3,11 +3,11 @@
 
 use std::time::Instant;
 
-use slint::{ComponentHandle, TimerMode};
+use slint::{ComponentHandle, Model, ModelRc, TimerMode, VecModel};
 
 use super::{BANNER_TIME, POLL_INTERVAL, Session, with_session};
-use crate::playback;
 use crate::ui::Screen;
+use crate::{info, playback};
 
 impl Session {
     pub(super) fn watch(&self) {
@@ -67,8 +67,17 @@ impl Session {
     }
 
     pub(super) fn poll(&self) {
-        if let Some(app) = self.app.upgrade() {
-            app.set_player(playback::read(&self.engine, app.window().is_fullscreen()));
+        let Some(app) = self.app.upgrade() else {
+            return;
+        };
+        app.set_player(playback::read(&self.engine, app.window().is_fullscreen()));
+        if app.get_info_visible() {
+            let channel = app
+                .get_channels()
+                .row_data(app.get_channel_index().max(0) as usize);
+            let channel = channel.map(|c| c.name).unwrap_or_default();
+            let lines = info::read(&self.engine, &channel, &app.get_provider_name());
+            app.set_info(ModelRc::new(VecModel::from(lines)));
         }
     }
 

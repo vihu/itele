@@ -1,9 +1,9 @@
-// Fullscreen player with the channel banner and live controls.
-// Layout: .ai-docs/mockups/04-player.html (without EPG: the timeline shows
-// the cached window instead of the programme).
+// Fullscreen player: channel banner, a control bar after mpv-modernz, and
+// the stream info overlay (`i`). Layout: .ai-docs/mockups/04-player.html
+// and the user's modernz reference (TASK-002).
 
 import { Theme } from "theme.slint";
-import { Button, ButtonKind, ChannelLogo, Hint, LiveMarker, Tag } from "atoms.slint";
+import { Button, ButtonKind, ChannelLogo, LiveMarker, Tag } from "atoms.slint";
 import { ChannelItem } from "live-tv.slint";
 
 export struct PlayerState {
@@ -14,32 +14,95 @@ export struct PlayerState {
     behind: string,
     // Playhead within the cached window, 0 to 1.
     position: float,
-    // Length of the cached window, empty while it is short.
-    window: string,
     audio: string,
     subtitles: string,
     fullscreen: bool,
 }
 
-component ControlButton inherits Rectangle {
+// One "label: value" pair in the info overlay.
+export struct InfoPair {
+    label: string,
+    value: string,
+}
+
+// One line of the info overlay; section heads are not indented.
+export struct InfoLine {
+    indent: bool,
+    pairs: [InfoPair],
+}
+
+component IconButton inherits Rectangle {
     in property <image> icon;
-    in property <bool> big;
     in property <bool> active;
+    in property <bool> big;
+    in property <string> badge;
     callback clicked();
-    width: big ? 56px : 44px;
+    width: big ? 52px : 44px;
     height: self.width;
     border-radius: self.width / 2;
-    background: big ? Theme.text : touch.has-hover ? #ffffff1f : transparent;
+    background: touch.has-hover ? #ffffff1f : transparent;
     Image {
         source: root.icon;
-        width: root.big ? 24px : 22px;
+        width: root.big ? 34px : 24px;
         height: self.width;
-        colorize: root.big ? Theme.bg : root.active ? Theme.accent : Theme.text;
+        colorize: root.active ? Theme.accent : Theme.text;
+    }
+    if root.badge != "": Text {
+        y: (parent.height - self.height) / 2 + 1px;
+        text: root.badge;
+        color: Theme.text;
+        font-size: 8.5px;
+        font-weight: 800;
     }
     touch := TouchArea {
         mouse-cursor: pointer;
         clicked => {
             root.clicked();
+        }
+    }
+}
+
+// A thin track with a round handle; reports where it was pressed or dragged.
+component Track inherits Rectangle {
+    in property <float> value;
+    in property <color> fill: Theme.accent;
+    in property <length> handle: 14px;
+    callback changed(float);
+    height: 18px;
+    property <length> thickness: touch.has-hover ? 6px : 4px;
+    Rectangle {
+        y: (parent.height - root.thickness) / 2;
+        height: root.thickness;
+        border-radius: root.thickness / 2;
+        background: #ffffff4d;
+    }
+    Rectangle {
+        x: 0;
+        y: (parent.height - root.thickness) / 2;
+        width: parent.width * root.value;
+        height: root.thickness;
+        border-radius: root.thickness / 2;
+        background: root.fill;
+    }
+    Rectangle {
+        x: parent.width * root.value - root.handle / 2;
+        y: (parent.height - root.handle) / 2;
+        width: root.handle;
+        height: root.handle;
+        border-radius: root.handle / 2;
+        background: root.fill;
+    }
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down) {
+                root.changed(max(0, min(1, self.mouse-x / self.width)));
+            }
+        }
+        moved => {
+            if (self.pressed) {
+                root.changed(max(0, min(1, self.mouse-x / self.width)));
+            }
         }
     }
 }
@@ -50,13 +113,18 @@ export component PlayerScreen inherits Rectangle {
     in property <PlayerState> state;
     in property <string> video-note;
     in property <bool> banner-visible;
+    in property <bool> info-visible;
+    in property <[InfoLine]> info;
     callback back();
     callback toggle-pause();
     callback seek(float);
+    callback seek-to(float);
     callback go-live();
     callback toggle-mute();
+    callback set-volume(float);
     callback cycle-audio();
     callback cycle-subtitles();
+    callback toggle-info();
     callback toggle-fullscreen();
 
     background: #000;
@@ -82,7 +150,7 @@ export component PlayerScreen inherits Rectangle {
         background: @linear-gradient(180deg, #08090cbf 0%, #08090c00 100%);
         HorizontalLayout {
             padding: 22px;
-            padding-left: 32px;
+            padding-left: 24px;
             alignment: start;
             VerticalLayout {
                 alignment: start;
@@ -99,196 +167,190 @@ export component PlayerScreen inherits Rectangle {
         }
     }
 
-    // Channel banner and controls.
+    // Stream info, after mpv's stats page.
+    if root.info-visible: Rectangle {
+        x: 24px;
+        y: 84px;
+        width: info-text.preferred-width;
+        height: info-text.preferred-height;
+        border-radius: Theme.radius-md;
+        background: #000000c7;
+        info-text := VerticalLayout {
+            padding: 24px;
+            padding-top: 12px;
+            spacing: 5px;
+            for line in root.info: HorizontalLayout {
+                alignment: start;
+                padding-left: line.indent ? 28px : 0px;
+                padding-top: line.indent ? 0px : 12px;
+                spacing: 22px;
+                for pair in line.pairs: HorizontalLayout {
+                    alignment: start;
+                    spacing: 7px;
+                    Text {
+                        text: pair.label + ":";
+                        color: Theme.text;
+                        font-size: Theme.fs-md;
+                        font-weight: 700;
+                    }
+                    Text {
+                        text: pair.value;
+                        color: Theme.text;
+                        font-size: Theme.fs-md;
+                    }
+                }
+            }
+        }
+    }
+
+    // Channel banner and the control bar.
     Rectangle {
         y: parent.height - self.height;
-        height: 330px;
+        height: 270px;
         opacity: root.banner-visible ? 1 : 0;
         animate opacity { duration: 200ms; }
-        background: @linear-gradient(0deg, #08090cf5 0%, #08090cd9 50%, #08090c00 100%);
+        background: @linear-gradient(0deg, #000000e6 0%, #000000b3 45%, #00000000 100%);
         VerticalLayout {
-            padding-left: 40px;
-            padding-right: 40px;
-            padding-bottom: 26px;
-            spacing: 10px;
+            padding-bottom: 10px;
+            spacing: 0px;
             alignment: end;
-            HorizontalLayout {
-                spacing: 14px;
-                alignment: start;
-                VerticalLayout {
-                    alignment: center;
-                    ChannelLogo {
-                        width: 72px;
-                        height: 46px;
-                        short: root.channel.short;
-                        tint: root.channel.tint;
-                        logo: root.channel.logo;
-                        has-logo: root.channel.has-logo;
+            VerticalLayout {
+                padding-left: 24px;
+                padding-right: 24px;
+                padding-bottom: 14px;
+                spacing: 8px;
+                HorizontalLayout {
+                    spacing: 12px;
+                    alignment: start;
+                    VerticalLayout {
+                        alignment: center;
+                        ChannelLogo {
+                            width: 64px;
+                            height: 40px;
+                            short: root.channel.short;
+                            tint: root.channel.tint;
+                            logo: root.channel.logo;
+                            has-logo: root.channel.has-logo;
+                        }
+                    }
+                    Text {
+                        text: root.channel.number;
+                        color: Theme.text-2;
+                        font-size: Theme.fs-lg;
+                        font-weight: 700;
+                        vertical-alignment: center;
+                    }
+                    if root.channel.archive != "": VerticalLayout {
+                        alignment: center;
+                        Tag {
+                            text: root.channel.archive;
+                            on-image: true;
+                        }
+                    }
+                    if root.state.audio != "": VerticalLayout {
+                        alignment: center;
+                        Tag {
+                            text: root.state.audio;
+                            on-image: true;
+                        }
+                    }
+                    if root.state.subtitles != "": VerticalLayout {
+                        alignment: center;
+                        Tag {
+                            text: "Subtitles: " + root.state.subtitles;
+                            on-image: true;
+                        }
                     }
                 }
                 Text {
-                    text: root.channel.number;
+                    text: root.channel.name;
+                    color: Theme.text;
+                    font-size: 34px;
+                    font-weight: 800;
+                    overflow: elide;
+                }
+                Text {
+                    text: root.channel.group;
                     color: Theme.text-2;
-                    font-size: Theme.fs-xl;
-                    font-weight: 700;
-                    vertical-alignment: center;
+                    font-size: Theme.fs-md;
+                    font-weight: 500;
                 }
-                VerticalLayout {
-                    alignment: center;
-                    LiveMarker { }
-                }
-                if root.channel.archive != "": VerticalLayout {
-                    alignment: center;
-                    Tag {
-                        text: root.channel.archive;
-                        on-image: true;
-                    }
-                }
-                if root.state.audio != "": VerticalLayout {
-                    alignment: center;
-                    Tag {
-                        text: root.state.audio;
-                        on-image: true;
-                    }
-                }
-                if root.state.subtitles != "": VerticalLayout {
-                    alignment: center;
-                    Tag {
-                        text: "Subtitles: " + root.state.subtitles;
-                        on-image: true;
-                    }
-                }
-            }
-            Text {
-                text: root.channel.name;
-                color: Theme.text;
-                font-size: 44px;
-                font-weight: 800;
-                overflow: elide;
-            }
-            Text {
-                text: root.channel.group;
-                color: Theme.text-2;
-                font-size: Theme.fs-md;
-                font-weight: 500;
-            }
-            Rectangle {
-                height: 4px;
             }
 
             // Timeline over the cached window; the right end is live.
             HorizontalLayout {
-                spacing: 16px;
-                Text {
-                    min-width: 48px;
-                    text: root.state.window == "" ? "" : "-" + root.state.window;
-                    color: Theme.text-2;
-                    font-size: Theme.fs-sm;
-                    font-weight: 600;
-                    vertical-alignment: center;
-                }
-                Rectangle {
-                    horizontal-stretch: 1;
-                    height: 16px;
-                    Rectangle {
-                        y: 5px;
-                        height: 6px;
-                        border-radius: 3px;
-                        background: #ffffff47;
+                padding-left: 16px;
+                padding-right: 16px;
+                Track {
+                    value: root.state.position;
+                    changed(fraction) => {
+                        root.seek-to(fraction);
                     }
-                    Rectangle {
-                        x: 0;
-                        y: 5px;
-                        width: parent.width * root.state.position;
-                        height: 6px;
-                        border-radius: 3px;
-                        background: Theme.accent;
-                    }
-                    Rectangle {
-                        x: parent.width * root.state.position - 8px;
-                        y: 0;
-                        width: 16px;
-                        height: 16px;
-                        border-radius: 8px;
-                        background: Theme.text;
-                        drop-shadow-blur: 6px;
-                        drop-shadow-offset-y: 2px;
-                        drop-shadow-color: #00000080;
-                    }
-                }
-                Text {
-                    min-width: 48px;
-                    text: "Live";
-                    color: root.state.behind == "" ? Theme.accent : Theme.text-2;
-                    font-size: Theme.fs-sm;
-                    font-weight: 700;
-                    horizontal-alignment: right;
-                    vertical-alignment: center;
                 }
             }
 
-            HorizontalLayout {
-                spacing: 8px;
-                ControlButton {
-                    icon: @image-url("icons/back.svg");
-                    clicked => {
-                        root.seek(-10);
+            // One row of same-size controls.
+            Rectangle {
+                height: 60px;
+                HorizontalLayout {
+                    x: 12px;
+                    width: self.preferred-width;
+                    alignment: start;
+                    spacing: 4px;
+                    IconButton {
+                        icon: @image-url("icons/audio.svg");
+                        clicked => {
+                            root.cycle-audio();
+                        }
                     }
-                }
-                ControlButton {
-                    big: true;
-                    icon: root.state.paused ? @image-url("icons/play.svg") : @image-url("icons/pause.svg");
-                    clicked => {
-                        root.toggle-pause();
+                    IconButton {
+                        icon: @image-url("icons/captions.svg");
+                        active: root.state.subtitles != "";
+                        clicked => {
+                            root.cycle-subtitles();
+                        }
                     }
-                }
-                ControlButton {
-                    icon: @image-url("icons/forward.svg");
-                    clicked => {
-                        root.seek(10);
-                    }
-                }
-                if root.state.behind != "": HorizontalLayout {
-                    horizontal-stretch: 0;
-                    padding-left: 14px;
-                    spacing: 14px;
-                    Text {
-                        horizontal-stretch: 0;
-                        text: root.state.behind + " behind live";
-                        color: Theme.text-3;
-                        font-size: Theme.fs-sm;
-                        font-weight: 600;
-                        vertical-alignment: center;
+                    IconButton {
+                        icon: root.state.muted ? @image-url("icons/mute.svg") : @image-url("icons/volume.svg");
+                        active: root.state.muted;
+                        clicked => {
+                            root.toggle-mute();
+                        }
                     }
                     VerticalLayout {
                         alignment: center;
-                        Rectangle {
-                            width: go-live.preferred-width;
-                            height: 34px;
-                            border-radius: 17px;
-                            background: go-live-touch.has-hover ? #f5a52438 : Theme.accent-soft;
-                            go-live := HorizontalLayout {
-                                padding-left: 14px;
-                                padding-right: 14px;
-                                spacing: 8px;
-                                VerticalLayout {
-                                    alignment: center;
-                                    Rectangle {
-                                        width: 7px;
-                                        height: 7px;
-                                        border-radius: 3.5px;
-                                        background: Theme.accent;
-                                    }
-                                }
-                                Text {
-                                    text: "Go live";
-                                    color: Theme.accent;
-                                    font-size: Theme.fs-sm;
-                                    font-weight: 700;
-                                    vertical-alignment: center;
-                                }
+                        Track {
+                            width: 88px;
+                            handle: 12px;
+                            fill: Theme.text;
+                            value: root.state.muted ? 0 : min(1, root.state.volume / 100);
+                            changed(fraction) => {
+                                root.set-volume(fraction * 100);
                             }
-                            go-live-touch := TouchArea {
+                        }
+                    }
+                    Rectangle {
+                        width: 14px;
+                    }
+                    if root.state.behind == "": LiveMarker {
+                        alignment: center;
+                    }
+                    if root.state.behind != "": HorizontalLayout {
+                        spacing: 12px;
+                        Text {
+                            text: "-" + root.state.behind;
+                            color: Theme.text;
+                            font-size: Theme.fs-md;
+                            font-weight: 600;
+                            vertical-alignment: center;
+                        }
+                        Text {
+                            text: "Go live";
+                            color: go-live.has-hover ? Theme.accent-hover : Theme.accent;
+                            font-size: Theme.fs-md;
+                            font-weight: 700;
+                            vertical-alignment: center;
+                            go-live := TouchArea {
                                 mouse-cursor: pointer;
                                 clicked => {
                                     root.go-live();
@@ -297,53 +359,50 @@ export component PlayerScreen inherits Rectangle {
                         }
                     }
                 }
-                Rectangle {
-                    horizontal-stretch: 1;
-                }
-                Hint {
-                    keys: ["↑", "↓"];
-                    label: "Channel";
-                }
-                Hint {
-                    keys: ["Space"];
-                    label: root.state.paused ? "Play" : "Pause";
-                }
-                Rectangle {
-                    width: 10px;
-                }
-                ControlButton {
-                    icon: @image-url("icons/audio.svg");
-                    clicked => {
-                        root.cycle-audio();
+                HorizontalLayout {
+                    x: (parent.width - self.width) / 2;
+                    width: self.preferred-width;
+                    alignment: center;
+                    spacing: 18px;
+                    IconButton {
+                        icon: @image-url("icons/back.svg");
+                        badge: "10";
+                        clicked => {
+                            root.seek(-10);
+                        }
+                    }
+                    IconButton {
+                        big: true;
+                        icon: root.state.paused ? @image-url("icons/play.svg") : @image-url("icons/pause.svg");
+                        clicked => {
+                            root.toggle-pause();
+                        }
+                    }
+                    IconButton {
+                        icon: @image-url("icons/forward.svg");
+                        badge: "10";
+                        clicked => {
+                            root.seek(10);
+                        }
                     }
                 }
-                ControlButton {
-                    icon: @image-url("icons/captions.svg");
-                    active: root.state.subtitles != "";
-                    clicked => {
-                        root.cycle-subtitles();
+                HorizontalLayout {
+                    x: parent.width - self.width - 12px;
+                    width: self.preferred-width;
+                    alignment: end;
+                    spacing: 4px;
+                    IconButton {
+                        icon: @image-url("icons/info.svg");
+                        active: root.info-visible;
+                        clicked => {
+                            root.toggle-info();
+                        }
                     }
-                }
-                ControlButton {
-                    icon: root.state.muted ? @image-url("icons/mute.svg") : @image-url("icons/volume.svg");
-                    active: root.state.muted;
-                    clicked => {
-                        root.toggle-mute();
-                    }
-                }
-                Text {
-                    text: root.state.muted ? "Muted" : root.state.volume + "%";
-                    color: Theme.text-2;
-                    font-size: Theme.fs-sm;
-                    font-weight: 600;
-                    vertical-alignment: center;
-                    min-width: 44px;
-                }
-                ControlButton {
-                    icon: @image-url("icons/maximize.svg");
-                    active: root.state.fullscreen;
-                    clicked => {
-                        root.toggle-fullscreen();
+                    IconButton {
+                        icon: root.state.fullscreen ? @image-url("icons/minimize.svg") : @image-url("icons/maximize.svg");
+                        clicked => {
+                            root.toggle-fullscreen();
+                        }
                     }
                 }
             }

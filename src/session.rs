@@ -88,6 +88,8 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
     app.on_seek(|sign| {
         with_session(|s| playback::seek(&s.engine, f64::from(sign.signum()) * SEEK_STEP))
     });
+    app.on_seek_to(|fraction| with_session(|s| playback::seek_to(&s.engine, fraction)));
+    app.on_set_volume(|percent| with_session(|s| playback::set_volume(&s.engine, percent)));
     app.on_toggle_mute(|| with_session(|s| playback::toggle_mute(&s.engine)));
     app.on_change_volume(|sign| {
         with_session(|s| playback::change_volume(&s.engine, f64::from(sign.signum()) * VOLUME_STEP))
