@@ -21,8 +21,8 @@ keyring          = "4.2.0"
 # `unstable-wgpu-NN`.
 mpv-engine       = { version = "0.2.1", features = ["wgpu"] }
 percent-encoding = "2.3"
-quick-xml = "0.42.0"
-rusqlite = { version = "0.40", features = ["bundled"] }
+quick-xml        = "0.42.0"
+rusqlite         = { version = "0.40", features = ["bundled"] }
 serde            = { version = "1", features = ["derive"] }
 serde_json       = "1"
 # `unstable-wgpu-30` alone selects no renderer: without a wgpu renderer
