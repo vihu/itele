@@ -236,6 +236,12 @@ impl Paths {
         self.data.join("history.sqlite")
     }
 
+    /// The favorites store, shared by all providers; data, like the watch
+    /// history.
+    pub fn favorites_path(&self) -> Utf8PathBuf {
+        self.data.join("favorites.sqlite")
+    }
+
     /// The programme guide store, shared by all providers.
     pub fn guide_path(&self) -> Utf8PathBuf {
         self.cache.join("guide.sqlite")
