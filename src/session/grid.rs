@@ -13,6 +13,7 @@ use itele::epg::Programme;
 use slint::{Model, ModelRc, VecModel};
 
 use super::Session;
+use super::catchup::replayable;
 use super::timefmt::{HALF_HOUR, clock, day_label, day_time, half_hour, now, when};
 use crate::ui::{GuideCell, GuideDetails, GuideRow, GuideTick, Screen};
 
@@ -200,26 +201,33 @@ impl Session {
         self.follow_cursor();
     }
 
-    /// Enter: watches the channel when its selected programme is on now.
+    /// Enter: watches the channel when its selected programme is on now,
+    /// or replays the programme when it ended and the channel keeps
+    /// catch-up.
     pub(super) fn grid_enter(&self) {
         let Some(app) = self.app.upgrade() else {
             return;
         };
-        let (row, live) = {
+        let (row, programme) = {
             let state = self.state.borrow();
             let grid = &state.grid;
-            let now = now();
-            let live = grid
+            let programme = grid
                 .programmes
                 .get(&grid.row)
                 .and_then(|p| at(p, grid.cursor))
-                .is_some_and(|p| p.start <= now && now < p.stop);
-            (grid.row, live)
+                .cloned();
+            (grid.row, programme)
         };
-        if live {
-            app.set_channel_index(row as i32);
+        let Some(programme) = programme else {
+            return;
+        };
+        let now = now();
+        app.set_channel_index(row as i32);
+        if programme.start <= now && now < programme.stop {
             self.refresh_programme();
             self.watch();
+        } else if programme.stop <= now {
+            self.replay_selected(programme);
         }
     }
 
@@ -327,7 +335,7 @@ impl Session {
                 grid.start,
                 now,
                 selected,
-                state.row_archive.get(row).copied().unwrap_or(false),
+                state.row_archive.get(row).copied().unwrap_or(0),
             );
             item.cells = ModelRc::new(VecModel::from(cells));
             grid.rows.set_row_data(row, item);
@@ -395,6 +403,7 @@ impl Session {
             };
         };
         let live = programme.start <= now && now < programme.stop;
+        let archive_days = state.row_archive.get(grid.row).copied().unwrap_or(0);
         GuideDetails {
             title: programme.title.as_str().into(),
             channel,
@@ -407,7 +416,7 @@ impl Session {
             when: when(programme, now).into(),
             description: programme.description.as_str().into(),
             live,
-            replay: false,
+            replay: replayable(programme, archive_days, now),
         }
     }
 
@@ -429,7 +438,7 @@ fn cells(
     start: i64,
     now: i64,
     selected: Option<i64>,
-    archive: bool,
+    archive_days: u32,
 ) -> Vec<GuideCell> {
     programmes
         .iter()
@@ -449,7 +458,7 @@ fn cells(
                 width: (p.stop - shown) as f32 / 60.0,
                 state,
                 selected: selected.is_some_and(|t| p.start <= t && t < p.stop),
-                replay: archive && state == 0,
+                replay: replayable(p, archive_days, now),
             }
         })
         .collect()
@@ -514,7 +523,7 @@ mod tests {
     #[test]
     fn cells_clip_to_the_window_and_mark_state() {
         let row = [p(-1800, 1800), p(1800, 3600), p(3600, 7200)];
-        let cells = cells(&row, 0, 2000, Some(2000), true);
+        let cells = cells(&row, 0, 2000, Some(2000), 7);
         assert_eq!(
             (cells[0].x, cells[0].width),
             (0.0, 30.0),

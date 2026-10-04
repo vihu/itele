@@ -6,6 +6,14 @@ use serde::Deserialize;
 pub(super) struct RawEnvelope {
     #[serde(default)]
     pub(super) user_info: Option<RawUserInfo>,
+    #[serde(default)]
+    pub(super) server_info: Option<RawServerInfo>,
+}
+
+#[derive(Deserialize)]
+pub(super) struct RawServerInfo {
+    #[serde(default, deserialize_with = "lenient::string")]
+    pub(super) timezone: Option<String>,
 }
 
 #[derive(Deserialize)]

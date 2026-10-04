@@ -13,7 +13,7 @@ use slint::{Model, ModelRc, SharedString, VecModel};
 
 use super::Session;
 use super::timefmt::{clock, minutes_left, now};
-use crate::live::thousands;
+use crate::names::thousands;
 use crate::ui::{ProgrammeInfo, UpcomingItem};
 
 /// A guide younger than this is not downloaded again.
@@ -107,11 +107,15 @@ impl Session {
         }
     }
 
-    /// Shows the selected channel's programme and what follows it.
+    /// Shows the selected channel's programme and what follows it. A replay
+    /// in the player keeps its own programme.
     pub(super) fn refresh_programme(&self) {
         let Some(app) = self.app.upgrade() else {
             return;
         };
+        if self.replaying() && app.get_screen() == crate::ui::Screen::Player {
+            return;
+        }
         let now = now();
         let programmes = {
             let state = self.state.borrow();

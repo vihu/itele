@@ -17,6 +17,10 @@ export struct PlayerState {
     audio: string,
     subtitles: string,
     fullscreen: bool,
+    // Playing a past programme from catch-up rather than live.
+    replay: bool,
+    // In replay, for example "12:34 / 1:00:00".
+    time: string,
 }
 
 // One "label: value" pair in the info overlay.
@@ -336,10 +340,33 @@ export component PlayerScreen inherits Rectangle {
                     Rectangle {
                         width: 14px;
                     }
-                    if root.state.behind == "": LiveMarker {
+                    if root.state.replay: HorizontalLayout {
+                        spacing: 12px;
+                        Text {
+                            text: root.state.time;
+                            color: Theme.text;
+                            font-size: Theme.fs-md;
+                            font-weight: 600;
+                            vertical-alignment: center;
+                        }
+                        Text {
+                            text: "Go live";
+                            color: replay-live.has-hover ? Theme.accent-hover : Theme.accent;
+                            font-size: Theme.fs-md;
+                            font-weight: 700;
+                            vertical-alignment: center;
+                            replay-live := TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => {
+                                    root.go-live();
+                                }
+                            }
+                        }
+                    }
+                    if !root.state.replay && root.state.behind == "": LiveMarker {
                         alignment: center;
                     }
-                    if root.state.behind != "": HorizontalLayout {
+                    if !root.state.replay && root.state.behind != "": HorizontalLayout {
                         spacing: 12px;
                         Text {
                             text: "-" + root.state.behind;

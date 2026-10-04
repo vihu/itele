@@ -19,8 +19,33 @@ pub const VOLUME_STEP: f64 = 5.0;
 /// Jump for the seek keys and buttons, in seconds.
 pub const SEEK_STEP: f64 = 10.0;
 
-/// Reads what the player banner shows.
-pub fn read(engine: &Engine, fullscreen: bool) -> PlayerState {
+/// Reads what the player banner shows. When replaying a programme of
+/// `replay` seconds, the timeline is the programme, not the cached window of
+/// a live stream; the guide's length is used because a catch-up stream
+/// rarely reports its own.
+pub fn read(engine: &Engine, fullscreen: bool, replay: Option<f64>) -> PlayerState {
+    if let Some(duration) = replay {
+        let position = engine.position().unwrap_or(0.0);
+        let tracks = engine
+            .get_property::<String>("track-list")
+            .unwrap_or_default();
+        return PlayerState {
+            paused: engine.is_paused(),
+            muted: engine.is_muted(),
+            volume: engine.volume().unwrap_or(100.0).round() as i32,
+            behind: SharedString::new(),
+            position: if duration > 0.0 {
+                (position / duration).clamp(0.0, 1.0) as f32
+            } else {
+                0.0
+            },
+            audio: track_label(&tracks, "audio").into(),
+            subtitles: track_label(&tracks, "sub").into(),
+            fullscreen,
+            replay: true,
+            time: format!("{} / {}", clock(position), clock(duration)).into(),
+        };
+    }
     let window = engine
         .get_property::<String>("demuxer-cache-state")
         .ok()
@@ -48,6 +73,8 @@ pub fn read(engine: &Engine, fullscreen: bool) -> PlayerState {
         audio: track_label(&tracks, "audio").into(),
         subtitles: track_label(&tracks, "sub").into(),
         fullscreen,
+        replay: false,
+        time: SharedString::new(),
     }
 }
 
@@ -60,6 +87,15 @@ pub fn toggle_pause(engine: &Engine) {
 /// Jumps `seconds` within the cached window (negative is back).
 pub fn seek(engine: &Engine, seconds: f64) {
     report("seek", engine.seek_relative(seconds));
+}
+
+/// Jumps to `fraction` (0 to 1) of a replayed programme `length` seconds
+/// long.
+pub fn seek_to_part(engine: &Engine, fraction: f32, length: f64) {
+    report(
+        "seek",
+        engine.seek_absolute(length * f64::from(fraction.clamp(0.0, 1.0))),
+    );
 }
 
 /// Jumps to `fraction` (0 to 1) of the cached window.

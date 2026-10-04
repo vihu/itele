@@ -19,6 +19,11 @@ impl Session {
         }
         self.select_timer.stop();
         self.play_selected();
+        self.enter_player();
+    }
+
+    /// Shows the player with its banner and starts reading mpv.
+    pub(super) fn enter_player(&self) {
         self.show(Screen::Player);
         self.show_banner();
         self.poll();
@@ -57,10 +62,12 @@ impl Session {
     }
 
     /// Jumps to the live edge by retuning, which is right even after a long
-    /// pause filled the cache and stopped it following the stream.
+    /// pause filled the cache and stopped it following the stream; from a
+    /// replay, returns to the channel live.
     pub(super) fn go_live(&self) {
         self.state.borrow_mut().playing = None;
         self.play_selected();
+        self.refresh_programme();
         if let Err(e) = self.engine.set_paused(false) {
             eprintln!("resume: {e}");
         }
@@ -70,7 +77,11 @@ impl Session {
         let Some(app) = self.app.upgrade() else {
             return;
         };
-        app.set_player(playback::read(&self.engine, app.window().is_fullscreen()));
+        app.set_player(playback::read(
+            &self.engine,
+            app.window().is_fullscreen(),
+            self.replay_length(),
+        ));
         if app.get_info_visible() {
             let channel = app
                 .get_channels()

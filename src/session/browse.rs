@@ -137,10 +137,9 @@ impl Session {
         let Some((source, stream)) = catalog.stream(*group, row) else {
             return;
         };
-        if playing
-            .as_ref()
-            .is_some_and(|p| p.provider == source.id && p.stream.id == stream.id)
-        {
+        if playing.as_ref().is_some_and(|p| {
+            p.provider == source.id && p.stream.id == stream.id && p.replay.is_none()
+        }) {
             return;
         }
         let Some(credentials) = slots
@@ -158,6 +157,7 @@ impl Session {
                 *playing = Some(Playing {
                     provider: source.id.clone(),
                     stream: stream.clone(),
+                    replay: None,
                 });
             }
             Err(_) => app.set_video_note("Could not start playback".into()),

@@ -84,6 +84,9 @@ pub struct Account {
     pub output_formats: Vec<String>,
     /// The panel's message of the day, when set.
     pub message: Option<String>,
+    /// The server's time zone (IANA name), which catch-up URLs are written
+    /// in; `None` when the panel does not say.
+    pub timezone: Option<String>,
 }
 
 /// A provider's id for a live, VOD, or series stream.
@@ -204,6 +207,38 @@ impl Credentials {
     }
 }
 
+impl Credentials {
+    /// Returns the URL that replays `stream` from `start` (Unix seconds) for
+    /// `minutes`, from the provider's catch-up.
+    ///
+    /// The start is written in the server's time zone, `timezone`, as the
+    /// panel expects; UTC when the panel did not name one or the name is
+    /// unknown. The URL embeds the username and password; never log it.
+    pub fn timeshift_url(
+        &self,
+        stream: StreamId,
+        start: i64,
+        minutes: u32,
+        timezone: Option<&str>,
+    ) -> String {
+        let zone = timezone
+            .and_then(|name| jiff::tz::TimeZone::get(name).ok())
+            .unwrap_or(jiff::tz::TimeZone::UTC);
+        let start = jiff::Timestamp::from_second(start)
+            .unwrap_or(jiff::Timestamp::UNIX_EPOCH)
+            .to_zoned(zone)
+            .strftime("%Y-%m-%d:%H-%M")
+            .to_string();
+        format!(
+            "{}/timeshift/{}/{}/{minutes}/{start}/{}.ts",
+            self.server,
+            utf8_percent_encode(&self.username, PATH_SEGMENT),
+            utf8_percent_encode(&self.password, PATH_SEGMENT),
+            stream.0,
+        )
+    }
+}
+
 impl std::fmt::Debug for Credentials {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         f.debug_struct("Credentials")
@@ -311,6 +346,7 @@ pub fn parse_account(json: &str) -> Result<Account> {
         max_connections: info.max_connections.and_then(|n| u32::try_from(n).ok()),
         output_formats: info.allowed_output_formats,
         message: info.message,
+        timezone: envelope.server_info.and_then(|s| s.timezone),
     })
 }
 
@@ -495,11 +531,26 @@ mod tests {
     }
 
     #[test]
+    fn timeshift_url_uses_the_server_time_zone() {
+        let creds = Credentials::new("http://host.tv:8080", "al ice", "pw").unwrap();
+        // 2026-10-04 21:00 UTC is 22:00 in London (BST).
+        let start = 1_791_147_600;
+        assert_eq!(
+            creds.timeshift_url(StreamId(42), start, 60, Some("Europe/London")),
+            "http://host.tv:8080/timeshift/al%20ice/pw/60/2026-10-04:22-00/42.ts"
+        );
+        let utc = creds.timeshift_url(StreamId(42), start, 45, None);
+        assert!(utc.ends_with("/45/2026-10-04:21-00/42.ts"), "{utc}");
+        let unknown = creds.timeshift_url(StreamId(42), start, 45, Some("Mars/Olympus"));
+        assert_eq!(unknown, utc);
+    }
+
+    #[test]
     fn account_parses_strings_as_numbers() {
         let json = r#"{"user_info":{"username":"u","password":"p","message":"",
             "auth":1,"status":"Active","exp_date":"1735689600","is_trial":"0",
             "active_cons":"1","max_connections":"2",
-            "allowed_output_formats":["m3u8","ts"]},"server_info":{}}"#;
+            "allowed_output_formats":["m3u8","ts"]},"server_info":{"timezone":"Europe/London"}}"#;
         let account = parse_account(json).unwrap();
         assert_eq!(account.status, "Active");
         assert_eq!(account.expires_at, Some(1_735_689_600));
@@ -509,6 +560,7 @@ mod tests {
             (Some(1), Some(2))
         );
         assert_eq!(account.message, None);
+        assert_eq!(account.timezone.as_deref(), Some("Europe/London"));
         assert_eq!(account.preferred_format(), OutputFormat::Ts);
     }
 

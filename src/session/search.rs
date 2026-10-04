@@ -1,14 +1,17 @@
 //! Search across every provider: channels by name, programmes by title.
-//! Enter plays a channel, or the channel of a programme that is on now.
+//! Enter plays a channel, the channel of a programme that is on now, or an
+//! ended programme from catch-up.
 
 use std::time::Duration;
 
+use itele::epg::Programme;
 use itele::xtream::StreamId;
 use slint::{ModelRc, SharedString, TimerMode, VecModel};
 
+use super::catchup::replayable;
 use super::timefmt::{day_time, now, when};
 use super::{Session, with_session};
-use crate::live::{short_name, tint};
+use crate::names::{short_name, tint};
 use crate::ui::{Screen, SearchItem};
 
 /// Pause after the last keystroke before searching.
@@ -33,7 +36,9 @@ enum Target {
     Programme {
         provider: String,
         stream: StreamId,
+        programme: Programme,
         live: bool,
+        replay: bool,
     },
 }
 
@@ -116,8 +121,7 @@ impl Session {
                 }
                 let p = &hit.programme;
                 let live = p.start <= now && now < p.stop;
-                let replayable =
-                    p.stop <= now && now - p.start < i64::from(stream.archive_days) * 86_400;
+                let replay = replayable(p, stream.archive_days, now);
                 let image = logo(stream.icon.as_deref());
                 items.push(SearchItem {
                     kind: 1,
@@ -129,12 +133,14 @@ impl Session {
                     has_logo: image.is_some(),
                     logo: image.unwrap_or_default(),
                     live,
-                    replay: replayable,
+                    replay,
                 });
                 targets.push(Target::Programme {
                     provider: source.id.clone(),
                     stream: stream.id,
+                    programme: p.clone(),
                     live,
+                    replay,
                 });
             }
         }
@@ -180,8 +186,8 @@ impl Session {
         app.invoke_reveal_search_row();
     }
 
-    /// Enter or a click: plays a channel, or a programme's channel when the
-    /// programme is on now.
+    /// Enter or a click: plays a channel, a programme's channel when the
+    /// programme is on now, or the programme from catch-up when it ended.
     pub(super) fn search_picked(&self, index: i32) {
         let chosen = {
             let state = self.state.borrow();
@@ -194,20 +200,35 @@ impl Session {
                         provider,
                         stream,
                         live: true,
-                    } => Some((provider.clone(), *stream)),
-                    Target::Heading | Target::Programme { live: false, .. } => None,
+                        ..
+                    } => Some((provider.clone(), *stream, None)),
+                    Target::Programme {
+                        provider,
+                        stream,
+                        programme,
+                        replay: true,
+                        ..
+                    } => Some((provider.clone(), *stream, Some(programme.clone()))),
+                    Target::Heading | Target::Programme { .. } => None,
                 })
         };
-        if let Some((provider, stream)) = chosen {
-            self.play_channel(&provider, stream);
+        let Some((provider, stream, programme)) = chosen else {
+            return;
+        };
+        if !self.select_by_id(&provider, stream) {
+            return;
+        }
+        match programme {
+            Some(programme) => self.replay_selected(programme),
+            None => self.watch(),
         }
     }
 
-    /// Shows `provider`'s channels in Live TV with `stream` selected, and
-    /// watches it.
-    pub(super) fn play_channel(&self, provider: &str, stream: StreamId) {
+    /// Shows `provider`'s channels in Live TV with `stream` selected;
+    /// `false` when the channel is gone.
+    fn select_by_id(&self, provider: &str, stream: StreamId) -> bool {
         let Some(app) = self.app.upgrade() else {
-            return;
+            return false;
         };
         let Some(index) = self
             .state
@@ -216,17 +237,17 @@ impl Session {
             .iter()
             .position(|s| s.provider.id == provider)
         else {
-            return;
+            return false;
         };
         self.select_view(index as i32);
         let row = self.state.borrow().catalog.row_of(0, provider, stream);
         let Some(row) = row else {
-            return;
+            return false;
         };
         app.set_channel_index(row as i32);
         self.refresh_programme();
         app.invoke_reveal_current();
-        self.watch();
+        true
     }
 }
 

@@ -6,20 +6,13 @@
 
 use itele::provider::Library;
 use itele::xtream::{LiveStream, StreamId};
-use slint::{Color, Image, SharedString};
+use slint::{Image, SharedString};
 
+use crate::names::{short_name, thousands, tint};
 use crate::ui::{ChannelItem, GroupItem};
 
 /// Name of the group that lists every channel of a provider.
 const ALL_CHANNELS: &str = "All channels";
-/// Longest short name drawn on a fallback logo tile.
-const SHORT_NAME_MAX: usize = 8;
-/// Longest country or package prefix skipped in channel names (`UK:`).
-const PREFIX_MAX: usize = 4;
-/// Fallback logo tile colours, from the approved mockups.
-const TINTS: [u32; 9] = [
-    0x1f5e3b, 0x2a3cc7, 0xb3261e, 0x0f6e8c, 0x3b3f4a, 0xc2185b, 0x5b6b2e, 0xd35400, 0x6b5ca5,
-];
 
 /// Every provider's channels, grouped for the current [`View`].
 #[derive(Default)]
@@ -186,15 +179,15 @@ impl Catalog {
         (source.id.clone(), ids)
     }
 
-    /// Whether each row in `group` keeps catch-up.
-    pub fn row_archive(&self, group: usize) -> Vec<bool> {
+    /// Days of catch-up each row in `group` keeps; 0 for none.
+    pub fn row_archive(&self, group: usize) -> Vec<u32> {
         let Some(g) = self.groups.get(group) else {
             return Vec::new();
         };
         let streams = &self.sources[g.source].library.streams;
         g.channels
             .iter()
-            .map(|&i| streams[i].archive_days > 0)
+            .map(|&i| streams[i].archive_days)
             .collect()
     }
 
@@ -348,54 +341,6 @@ fn channel_item(source: &Source, stream: &LiveStream, row: usize, provider: &str
         next_time: SharedString::new(),
         next_title: SharedString::new(),
     }
-}
-
-/// The first word of `name` that says something, upper-cased and cut to
-/// fit a logo tile. Skips a provider's country prefix (`UK: Sky Sports`,
-/// `FR | TF1`) and one-letter words.
-pub fn short_name(name: &str) -> String {
-    let name = match name.split_once([':', '|']) {
-        Some((prefix, rest)) if prefix.trim().len() <= PREFIX_MAX && !rest.trim().is_empty() => {
-            rest
-        }
-        _ => name,
-    };
-    let word = |w: &&str| w.chars().filter(|c| c.is_alphanumeric()).count();
-    let mut words = name.split_whitespace().filter(|w| word(w) > 0);
-    let first = words
-        .clone()
-        .find(|w| word(w) > 1)
-        .or_else(|| words.next())
-        .unwrap_or("");
-    first
-        .chars()
-        .filter(|c| c.is_alphanumeric())
-        .take(SHORT_NAME_MAX)
-        .flat_map(char::to_uppercase)
-        .collect()
-}
-
-/// A stable tile colour for `name`.
-pub fn tint(name: &str) -> Color {
-    // FNV-1a: stable across runs, unlike the std hasher.
-    let hash = name.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |h, b| {
-        (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
-    });
-    let rgb = TINTS[(hash % TINTS.len() as u64) as usize];
-    Color::from_rgb_u8((rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8)
-}
-
-/// `1234567` as `1,234,567`.
-pub fn thousands(n: usize) -> String {
-    let digits = n.to_string();
-    let mut out = String::with_capacity(digits.len() + digits.len() / 3);
-    for (i, c) in digits.chars().enumerate() {
-        if i > 0 && (digits.len() - i).is_multiple_of(3) {
-            out.push(',');
-        }
-        out.push(c);
-    }
-    out
 }
 
 #[cfg(test)]
@@ -573,35 +518,5 @@ mod tests {
         );
         assert!(catalog.by_guide_id("south", "one.uk").is_none());
         assert!(catalog.by_guide_id("north", "two.uk").is_none());
-    }
-
-    #[test]
-    fn short_names_fit_a_tile() {
-        assert_eq!(short_name("Volt Sports 1"), "VOLT");
-        assert_eq!(short_name("Ciné+ Club"), "CINÉ");
-        assert_eq!(short_name("Supercalifragilistic"), "SUPERCAL");
-        assert_eq!(short_name("UK: Sky Sports Main Event FHD"), "SKY");
-        assert_eq!(short_name("FR | TF1 HD"), "TF1");
-        assert_eq!(short_name("B Atlas Nature HD"), "ATLAS");
-        assert_eq!(
-            short_name("Ratio: 16:9"),
-            "RATIO",
-            "long prefix is part of the name"
-        );
-        assert_eq!(short_name("A"), "A");
-        assert_eq!(short_name(""), "");
-    }
-
-    #[test]
-    fn tint_is_stable() {
-        assert_eq!(tint("Atlas Nature HD"), tint("Atlas Nature HD"));
-    }
-
-    #[test]
-    fn thousands_groups_digits() {
-        assert_eq!(thousands(0), "0");
-        assert_eq!(thousands(999), "999");
-        assert_eq!(thousands(1284), "1,284");
-        assert_eq!(thousands(1_234_567), "1,234,567");
     }
 }

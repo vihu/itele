@@ -7,6 +7,7 @@
 //! is ever logged or shown.
 
 mod browse;
+mod catchup;
 mod grid;
 mod guide;
 mod player;
@@ -19,14 +20,15 @@ use std::rc::Rc;
 use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
 
-use itele::epg::Store;
+use itele::epg::{Programme, Store};
 use itele::provider::{Library, Paths, Provider};
 use itele::xtream::{Credentials, LiveStream};
 use mpv_engine::{EndReason, Engine, PlaybackEvent};
 use slint::{ComponentHandle, SharedString, Timer, TimerMode, VecModel};
 
-use crate::live::{Catalog, View, thousands};
+use crate::live::{Catalog, View};
 use crate::logos::Logos;
+use crate::names::thousands;
 use crate::playback::{self, SEEK_STEP, VOLUME_STEP};
 use crate::ui::{AppWindow, ChannelItem, Screen};
 
@@ -76,8 +78,8 @@ struct State {
     row_provider: String,
     /// Each row's XMLTV channel id, lowercased; empty without one.
     row_guide_ids: Vec<String>,
-    /// Whether each row keeps catch-up.
-    row_archive: Vec<bool>,
+    /// Days of catch-up each row keeps; 0 for none.
+    row_archive: Vec<u32>,
     /// Rows the channel list last reported on screen.
     visible: std::ops::Range<usize>,
     grid: grid::Grid,
@@ -104,6 +106,8 @@ struct Slot {
 struct Playing {
     provider: String,
     stream: LiveStream,
+    /// The past programme being replayed from catch-up; `None` when live.
+    replay: Option<Programme>,
 }
 
 /// Wires `app` to a new session and opens the saved providers, or the login
@@ -149,7 +153,15 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
     app.on_seek(|sign| {
         with_session(|s| playback::seek(&s.engine, f64::from(sign.signum()) * SEEK_STEP));
     });
-    app.on_seek_to(|fraction| with_session(|s| playback::seek_to(&s.engine, fraction)));
+    app.on_seek_to(|fraction| {
+        with_session(|s| {
+            if let Some(length) = s.replay_length() {
+                playback::seek_to_part(&s.engine, fraction, length);
+            } else {
+                playback::seek_to(&s.engine, fraction);
+            }
+        });
+    });
     app.on_set_volume(|percent| with_session(|s| playback::set_volume(&s.engine, percent)));
     app.on_toggle_mute(|| with_session(|s| playback::toggle_mute(&s.engine)));
     app.on_change_volume(|sign| {
@@ -165,6 +177,7 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
     app.on_guide_shift(|direction| with_session(|s| s.grid_shift(direction)));
     app.on_guide_cell_clicked(|row, cell| with_session(|s| s.grid_cell_clicked(row, cell)));
     app.on_guide_enter(|| with_session(|s| s.grid_enter()));
+    app.on_guide_replay(|| with_session(|s| s.grid_enter()));
     app.on_search_edited(|_| with_session(|s| s.search_edited()));
     app.on_search_picked(|i| with_session(|s| s.search_picked(i)));
     app.on_search_move(|delta| with_session(|s| s.search_move(delta)));

@@ -155,6 +155,10 @@ class Handler(BaseHTTPRequestHandler):
             if stream:
                 return self.send(logo_svg(stream["name"], COLORS[sid % len(COLORS)]), "image/svg+xml")
         parts = url.path.strip("/").split("/")
+        # Catch-up: /timeshift/user/pass/minutes/YYYY-MM-DD:HH-MM/id.ts
+        if len(parts) == 6 and parts[0] == "timeshift" and parts[1:3] == [USER, PASSWORD] and self.media:
+            sid = int(parts[5].split(".")[0])
+            return self.stream(self.media[(sid + 1) % len(self.media)])
         if len(parts) == 4 and parts[0] == "live" and parts[1:3] == [USER, PASSWORD] and self.media:
             sid = int(parts[3].split(".")[0])
             return self.stream(self.media[sid % len(self.media)])
