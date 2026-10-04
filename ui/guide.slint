@@ -99,6 +99,8 @@ export component GuideScreen inherits Rectangle {
     out property <length> track-width: root.width - 76px - root.channel-column;
     callback rows-visible(int, int);
     callback cell-clicked(int, int);
+    // A click on a channel's name: the preview switches to it.
+    callback channel-clicked(int);
     callback watch();
     callback replay();
     callback earlier();
@@ -351,7 +353,13 @@ export component GuideScreen inherits Rectangle {
                         HorizontalLayout {
                             Rectangle {
                                 width: root.channel-column;
-                                background: r == root.row-index ? Theme.surface-1 : Theme.bg;
+                                background: r == root.row-index || channel-touch.has-hover ? Theme.surface-1 : Theme.bg;
+                                channel-touch := TouchArea {
+                                    mouse-cursor: pointer;
+                                    clicked => {
+                                        root.channel-clicked(r);
+                                    }
+                                }
                                 HorizontalLayout {
                                     padding-left: 20px;
                                     padding-right: 12px;

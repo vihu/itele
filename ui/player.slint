@@ -51,7 +51,11 @@ export component PlayerScreen inherits Rectangle {
     in-out property <bool> info-visible;
     in property <[InfoLine]> info;
     in property <string> back-label: "Live TV";
+    // The channel, or the movie or series, is a favorite.
+    in property <bool> favorite;
     callback back();
+    // H or the heart: what is playing joins the favorites, or leaves.
+    callback favorite-clicked();
     callback escape();
     callback zap(int);
     callback show-banner();
@@ -123,6 +127,8 @@ export component PlayerScreen inherits Rectangle {
                 root.toggle-fullscreen();
             } else if (key == "i") {
                 root.info-visible = !root.info-visible;
+            } else if (key == "h") {
+                root.favorite-clicked();
             } else if (event.text == Key.Escape && root.info-visible) {
                 root.info-visible = false;
             } else if (event.text == Key.Escape) {
@@ -315,12 +321,14 @@ export component PlayerScreen inherits Rectangle {
                 }
             }
 
-            // One row of same-size controls.
+            // One row of controls, every one centred on the row's middle.
             Rectangle {
                 height: 60px;
                 HorizontalLayout {
                     x: 12px;
+                    y: (parent.height - self.height) / 2;
                     width: self.preferred-width;
+                    height: 44px;
                     alignment: start;
                     spacing: 4px;
                     IconButton {
@@ -432,15 +440,20 @@ export component PlayerScreen inherits Rectangle {
                 }
                 HorizontalLayout {
                     x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
                     width: self.preferred-width;
+                    height: 52px;
                     alignment: center;
                     spacing: 18px;
-                    IconButton {
-                        icon: @image-url("icons/back.svg");
-                        badge: "10";
-                        clicked => {
-                            root.seek(-10);
-                            root.show-banner();
+                    VerticalLayout {
+                        alignment: center;
+                        IconButton {
+                            icon: @image-url("icons/back.svg");
+                            badge: "10";
+                            clicked => {
+                                root.seek(-10);
+                                root.show-banner();
+                            }
                         }
                     }
                     IconButton {
@@ -451,20 +464,33 @@ export component PlayerScreen inherits Rectangle {
                             root.show-banner();
                         }
                     }
-                    IconButton {
-                        icon: @image-url("icons/forward.svg");
-                        badge: "10";
-                        clicked => {
-                            root.seek(10);
-                            root.show-banner();
+                    VerticalLayout {
+                        alignment: center;
+                        IconButton {
+                            icon: @image-url("icons/forward.svg");
+                            badge: "10";
+                            clicked => {
+                                root.seek(10);
+                                root.show-banner();
+                            }
                         }
                     }
                 }
                 HorizontalLayout {
                     x: parent.width - self.width - 12px;
+                    y: (parent.height - self.height) / 2;
                     width: self.preferred-width;
+                    height: 44px;
                     alignment: end;
                     spacing: 4px;
+                    IconButton {
+                        icon: root.favorite ? @image-url("icons/heart-fill.svg") : @image-url("icons/heart.svg");
+                        active: root.favorite;
+                        clicked => {
+                            root.favorite-clicked();
+                            root.show-banner();
+                        }
+                    }
                     IconButton {
                         icon: @image-url("icons/info.svg");
                         active: root.info-visible;

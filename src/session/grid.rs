@@ -186,6 +186,30 @@ impl Session {
         self.follow_cursor();
     }
 
+    /// A click on a channel's name: selects what it shows now and plays it
+    /// in the preview.
+    pub(super) fn grid_channel_clicked(&self, row: i32) {
+        let Some(app) = self.app.upgrade() else {
+            return;
+        };
+        let Ok(row) = usize::try_from(row) else {
+            return;
+        };
+        {
+            let mut state = self.state.borrow_mut();
+            if row >= state.grid.rows.row_count() {
+                return;
+            }
+            state.grid.row = row;
+            state.grid.cursor = now();
+        }
+        self.follow_cursor();
+        app.set_channel_index(row as i32);
+        self.select_timer.stop();
+        self.play_selected();
+        self.refresh_programme();
+    }
+
     /// Enter: watches the channel when its selected programme is on now,
     /// or replays the programme when it ended and the channel keeps
     /// catch-up.

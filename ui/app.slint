@@ -98,6 +98,7 @@ export component AppWindow inherits Window {
     callback guide-shift(int);
     callback guide-rows-visible <=> guide.rows-visible;
     callback guide-cell-clicked(int, int);
+    callback guide-channel-clicked <=> guide.channel-clicked;
 
     // Scrolls the guide grid to its selected row.
     public function reveal-guide-row() {
@@ -464,6 +465,14 @@ export component AppWindow inherits Window {
 
         player-screen := PlayerScreen {
             visible: root.screen == Screen.player;
+            favorite: root.player.vod ? root.details.favorite : root.current.favorite;
+            favorite-clicked => {
+                if (root.player.vod) {
+                    root.details-favorite();
+                } else {
+                    root.toggle-favorite(root.channel-index);
+                }
+            }
             back-label: root.player-back;
             frame: root.screen == Screen.player ? root.frame : @image-url("");
             channel: root.current;

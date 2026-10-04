@@ -280,6 +280,7 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
     app.on_guide_now(|| with_session(|s| s.grid_now()));
     app.on_guide_shift(|direction| with_session(|s| s.grid_shift(direction)));
     app.on_guide_cell_clicked(|row, cell| with_session(|s| s.grid_cell_clicked(row, cell)));
+    app.on_guide_channel_clicked(|row| with_session(|s| s.grid_channel_clicked(row)));
     app.on_guide_enter(|| with_session(|s| s.grid_enter()));
     app.on_guide_replay(|| with_session(|s| s.grid_enter()));
     let search = app.global::<SearchData>();

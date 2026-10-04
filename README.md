@@ -105,11 +105,12 @@ images as posters.
 | Player    | `Space` pause, `←` `→` seek 10 s, `L` go live, `↑` `↓` change channel    |
 | Player    | `M` mute, `+` `-` volume, `A` audio menu, `S` subtitles menu             |
 | Player    | `F` fullscreen; in a menu `↑` `↓` choose, `Enter` pick, `Esc` close      |
-| Player    | `I` stream info, `Esc` or `Backspace` back                               |
+| Player    | `H` favorite, `I` stream info, `Esc` or `Backspace` back                 |
 
 Series work like Movies. On a movie or an episode the player has no Go live
 or channel keys. Watching from Favorites, `↑` `↓` in the player follow your
-list across providers.
+list across providers. In the guide, a click on a channel's name plays it
+in the preview above.
 
 ## How it is checked
 
