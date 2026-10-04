@@ -11,7 +11,9 @@ use std::time::{Duration, SystemTime};
 use camino::{Utf8Path, Utf8PathBuf};
 use serde::{Deserialize, Serialize};
 
-use crate::xtream::{self, Account, Action, Category, Client, Credentials, LiveStream};
+use crate::xtream::{
+    self, Account, Action, Category, Client, Credentials, LiveStream, Movie, Show,
+};
 
 /// Result type for this module.
 pub type Result<T = ()> = std::result::Result<T, Error>;
@@ -56,6 +58,30 @@ pub struct Library {
     pub categories: Vec<Category>,
     /// Live channels in provider order.
     pub streams: Vec<LiveStream>,
+}
+
+/// One provider's movies or series.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Shelf<T> {
+    /// Categories in provider order.
+    pub categories: Vec<Category>,
+    /// Titles in provider order.
+    pub titles: Vec<T>,
+}
+
+/// What a [`Shelf`] lists: [`Movie`] or [`Show`].
+pub trait Listing: Sized {
+    /// The request for the categories.
+    const CATEGORIES: Action;
+    /// The request for the titles.
+    const TITLES: Action;
+
+    /// Parses the body of [`Self::TITLES`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the body is not the expected JSON.
+    fn parse(json: &str) -> xtream::Result<Vec<Self>>;
 }
 
 /// What can go wrong loading or saving providers.
@@ -263,6 +289,31 @@ impl Cache {
     pub fn write(&self, action: Action, body: &str) -> Result {
         write_atomic(&self.path(action), body)
     }
+
+    /// The cached body for `action`, parsed; `None` when missing or no
+    /// longer parseable.
+    pub fn load<T>(&self, action: Action, parse: impl Fn(&str) -> xtream::Result<T>) -> Option<T> {
+        parse(&self.read(action)?).ok()
+    }
+
+    /// Fetches `action` from the provider and parses it, caching the body
+    /// once it parses, so a broken response never replaces a good one.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Xtream`] when the request fails or the body does not
+    /// parse, and [`Error::Io`] when the cache cannot be written.
+    pub fn refresh<T>(
+        &self,
+        client: &Client,
+        action: Action,
+        parse: impl Fn(&str) -> xtream::Result<T>,
+    ) -> Result<T> {
+        let body = client.fetch(action).map_err(Error::Xtream)?;
+        let parsed = parse(&body).map_err(Error::Xtream)?;
+        self.write(action, &body)?;
+        Ok(parsed)
+    }
 }
 
 impl Library {
@@ -306,6 +357,48 @@ impl Library {
     }
 }
 
+impl<T: Listing> Shelf<T> {
+    /// Builds the shelf from the cache alone; `None` when any part is
+    /// missing or no longer parses.
+    pub fn from_cache(cache: &Cache) -> Option<Self> {
+        Some(Self {
+            categories: cache.load(T::CATEGORIES, xtream::parse_categories)?,
+            titles: cache.load(T::TITLES, T::parse)?,
+        })
+    }
+
+    /// Fetches the shelf from the provider and refreshes the cache.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Xtream`] when a request fails, and [`Error::Io`]
+    /// when the cache cannot be written.
+    pub fn fetch(client: &Client, cache: &Cache) -> Result<Self> {
+        Ok(Self {
+            categories: cache.refresh(client, T::CATEGORIES, xtream::parse_categories)?,
+            titles: cache.refresh(client, T::TITLES, T::parse)?,
+        })
+    }
+}
+
+impl Listing for Movie {
+    const CATEGORIES: Action = Action::VodCategories;
+    const TITLES: Action = Action::VodStreams;
+
+    fn parse(json: &str) -> xtream::Result<Vec<Self>> {
+        xtream::parse_movies(json)
+    }
+}
+
+impl Listing for Show {
+    const CATEGORIES: Action = Action::SeriesCategories;
+    const TITLES: Action = Action::Series;
+
+    fn parse(json: &str) -> xtream::Result<Vec<Self>> {
+        xtream::parse_shows(json)
+    }
+}
+
 impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
@@ -340,9 +433,15 @@ impl Provider {
 impl Cache {
     fn path(&self, action: Action) -> Utf8PathBuf {
         let name = match action {
-            Action::Account => "account.json",
-            Action::LiveCategories => "live_categories.json",
-            Action::LiveStreams => "live_streams.json",
+            Action::Account => "account.json".to_owned(),
+            Action::LiveCategories => "live_categories.json".to_owned(),
+            Action::LiveStreams => "live_streams.json".to_owned(),
+            Action::VodCategories => "vod_categories.json".to_owned(),
+            Action::VodStreams => "vod_streams.json".to_owned(),
+            Action::SeriesCategories => "series_categories.json".to_owned(),
+            Action::Series => "series.json".to_owned(),
+            Action::MovieInfo(id) => format!("movie_info/{}.json", id.0),
+            Action::ShowInfo(id) => format!("series_info/{}.json", id.0),
         };
         self.dir.join(name)
     }
@@ -465,6 +564,44 @@ mod tests {
         assert_eq!(library.categories[0].name, "News");
         assert_eq!(library.streams[0].name, "One");
         assert!(cache.age(Action::LiveStreams).unwrap() < Duration::from_secs(60));
+    }
+
+    #[test]
+    fn shelf_round_trips_through_the_cache() {
+        let (_dir, paths) = temp_paths();
+        let cache = paths.cache(&provider());
+        assert!(Shelf::<Movie>::from_cache(&cache).is_none());
+        cache.write(Action::VodCategories, CATEGORIES).unwrap();
+        cache
+            .write(
+                Action::VodStreams,
+                r#"[{"name":"Heat (1995)","stream_id":9,"category_id":"1"}]"#,
+            )
+            .unwrap();
+        let movies = Shelf::<Movie>::from_cache(&cache).unwrap();
+        assert_eq!(movies.titles[0].year, Some(1995));
+        assert!(
+            Shelf::<Show>::from_cache(&cache).is_none(),
+            "series are cached apart"
+        );
+
+        let info = xtream::MovieInfo::default();
+        assert_eq!(
+            cache.load(Action::MovieInfo(xtream::StreamId(9)), |_| Ok(info.clone())),
+            None,
+            "nothing cached for this title yet"
+        );
+        cache
+            .write(Action::MovieInfo(xtream::StreamId(9)), "{}")
+            .unwrap();
+        assert!(
+            cache
+                .load(
+                    Action::MovieInfo(xtream::StreamId(9)),
+                    xtream::parse_movie_info
+                )
+                .is_some()
+        );
     }
 
     #[test]

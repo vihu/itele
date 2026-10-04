@@ -1,4 +1,4 @@
-//! Xtream Codes player API client: account, live categories, live streams.
+//! Xtream Codes player API client: account, live TV, movies and series.
 //!
 //! Fetching returns the raw JSON body so callers can cache it as-is; the
 //! `parse_*` functions turn a body into typed values. Providers disagree on
@@ -14,8 +14,14 @@ use std::time::Duration;
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 
 mod raw;
+mod vod;
 
 use raw::{RawCategory, RawEnvelope, RawLiveStream};
+
+pub use vod::{
+    Details, Episode, EpisodeId, Movie, MovieInfo, Season, SeriesId, Show, ShowInfo,
+    parse_movie_info, parse_movies, parse_show_info, parse_shows,
+};
 
 /// Result type for this module.
 pub type Result<T = ()> = std::result::Result<T, Error>;
@@ -65,6 +71,18 @@ pub enum Action {
     LiveCategories,
     /// Every live channel, across all categories.
     LiveStreams,
+    /// Movie categories.
+    VodCategories,
+    /// Every movie, across all categories.
+    VodStreams,
+    /// Series categories.
+    SeriesCategories,
+    /// Every series, across all categories.
+    Series,
+    /// One movie's details.
+    MovieInfo(StreamId),
+    /// One series' details, seasons and episodes.
+    ShowInfo(SeriesId),
 }
 
 /// The provider's view of the account.
@@ -280,6 +298,9 @@ impl Client {
         if let Some(name) = action.query() {
             request = request.query("action", name);
         }
+        if let Some((key, id)) = action.target() {
+            request = request.query(key, id.to_string());
+        }
         let mut response = request.call().map_err(Error::from_ureq)?;
         response
             .body_mut()
@@ -350,8 +371,9 @@ pub fn parse_account(json: &str) -> Result<Account> {
     })
 }
 
-/// Parses the body of [`Action::LiveCategories`], dropping entries without
-/// an id.
+/// Parses the body of [`Action::LiveCategories`],
+/// [`Action::VodCategories`] or [`Action::SeriesCategories`], dropping
+/// entries without an id.
 ///
 /// # Errors
 ///
@@ -435,6 +457,21 @@ impl Action {
             Action::Account => None,
             Action::LiveCategories => Some("get_live_categories"),
             Action::LiveStreams => Some("get_live_streams"),
+            Action::VodCategories => Some("get_vod_categories"),
+            Action::VodStreams => Some("get_vod_streams"),
+            Action::SeriesCategories => Some("get_series_categories"),
+            Action::Series => Some("get_series"),
+            Action::MovieInfo(_) => Some("get_vod_info"),
+            Action::ShowInfo(_) => Some("get_series_info"),
+        }
+    }
+
+    /// The query parameter naming the one title an action is about.
+    const fn target(self) -> Option<(&'static str, u64)> {
+        match self {
+            Action::MovieInfo(id) => Some(("vod_id", id.0)),
+            Action::ShowInfo(id) => Some(("series_id", id.0)),
+            _ => None,
         }
     }
 }
