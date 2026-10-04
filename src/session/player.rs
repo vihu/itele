@@ -69,16 +69,22 @@ impl Session {
         }
     }
 
-    /// A movie or an episode played to its end: back to its page.
+    /// A movie or an episode played to its end: back to its page, and on
+    /// to the next episode when there is one.
     pub(super) fn title_ended(&self) {
         let in_player = self
             .app
             .upgrade()
             .is_some_and(|app| app.get_screen() == Screen::Player);
-        if in_player && self.timeline() == Timeline::Title {
-            // At the end mpv has no position left to read.
-            self.save_at_end();
-            self.back();
+        if !in_player || self.timeline() != Timeline::Title {
+            return;
+        }
+        let finished = self.playing_entry();
+        // At the end mpv has no position left to read.
+        self.save_at_end();
+        self.back();
+        if let Some(entry) = finished.filter(|e| e.kind == itele::history::Kind::Episode) {
+            self.play_next_episode(&entry.id);
         }
     }
 
@@ -92,8 +98,9 @@ impl Session {
 
     /// Saves the title playing as watched to the end.
     fn save_at_end(&self) {
-        if let Some(duration) = self.engine.duration() {
-            self.record(duration, duration);
+        let length = self.title_length.get();
+        if length > 0.0 {
+            self.record(length, length);
         }
     }
 
@@ -158,8 +165,13 @@ impl Session {
             app.window().is_fullscreen(),
             timeline,
         ));
-        if timeline == Timeline::Title && self.saved_at.get().elapsed() >= SAVE_EVERY {
-            self.save_progress();
+        if timeline == Timeline::Title {
+            if let Some(length) = self.engine.duration() {
+                self.title_length.set(length);
+            }
+            if self.saved_at.get().elapsed() >= SAVE_EVERY {
+                self.save_progress();
+            }
         }
         if app.get_info_visible() {
             let name = match self.state.borrow().playing.as_ref().map(|p| &p.content) {

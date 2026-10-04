@@ -70,6 +70,9 @@ pub struct Session {
     history: Option<History>,
     /// When the progress of the title playing was last saved.
     saved_at: Cell<Instant>,
+    /// The length of the title playing, as mpv last reported it; at the end
+    /// of the file mpv no longer can.
+    title_length: Cell<f64>,
     select_timer: Timer,
     banner_timer: Timer,
     banner_until: Cell<Instant>,
@@ -182,6 +185,7 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
         guide: RefCell::new(guide),
         history,
         saved_at: Cell::new(Instant::now()),
+        title_length: Cell::new(0.0),
         select_timer: Timer::default(),
         banner_timer: Timer::default(),
         banner_until: Cell::new(Instant::now()),

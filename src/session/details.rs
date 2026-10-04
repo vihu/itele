@@ -109,6 +109,7 @@ impl Session {
         if self.load(&feature.url, at).is_err() {
             return self.set_page_note("Could not start playback");
         }
+        self.title_length.set(0.0);
         app.set_video_note("Loading…".into());
         app.set_provider_name(provider_name.into());
         app.set_programme(feature.programme);

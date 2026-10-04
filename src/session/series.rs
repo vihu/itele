@@ -11,7 +11,7 @@ use slint::{Model, ModelRc, SharedString, VecModel};
 
 use super::page::{Feature, Page, Subject, loading_note};
 use super::timefmt::{minutes_left, runtime};
-use super::{Session, on_ui_thread};
+use super::{Session, Start, on_ui_thread};
 use crate::art::Size;
 use crate::ui::{EpisodeItem, ProgrammeInfo, Screen, SeasonItem};
 
@@ -55,6 +55,32 @@ impl Session {
                 .map_err(|e| e.to_string());
             on_ui_thread(move |s| s.show_info_ready(token, result));
         });
+    }
+
+    /// Plays the episode the page selected after `finished` ended, unless
+    /// `finished` was the last.
+    pub(super) fn play_next_episode(&self, finished: &str) {
+        let Some(app) = self.app.upgrade() else {
+            return;
+        };
+        let selected = {
+            let state = self.state.borrow();
+            let Some(Subject::Show { info, season, .. }) = state.page.as_ref().map(|p| &p.subject)
+            else {
+                return;
+            };
+            usize::try_from(app.get_details_episode_index())
+                .ok()
+                .zip(info.as_ref())
+                .and_then(|(index, info)| {
+                    season_episodes(info, *season)
+                        .get(index)
+                        .map(|e| e.id.0.clone())
+                })
+        };
+        if selected.is_some_and(|id| id != finished) {
+            self.details_play(Start::Resume);
+        }
     }
 
     /// A season tab picked: its episodes, from the first.
