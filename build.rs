@@ -1,13 +1,9 @@
-//! Compiles the Slint UI in `ui/`, and names the commit itele is built from
-//! for Settings' About section.
+//! Names the commit itele is built from, for Settings' About section.
 
 use std::path::Path;
 use std::process::Command;
 
 fn main() {
-    let config = slint_build::CompilerConfiguration::new().with_style("fluent-dark".into());
-    slint_build::compile_with_config("ui/app.slint", config).expect("the Slint UI compiles");
-
     // The short hash and date of the last commit, for example
     // `7542fa1 2026-10-04`; empty outside a Git checkout or before the
     // first commit.

@@ -2596,6 +2596,7 @@ dependencies = [
  "camino",
  "directories",
  "image",
+ "itele-ui",
  "jiff",
  "keyring",
  "mpv-engine",
@@ -2605,11 +2606,18 @@ dependencies = [
  "serde",
  "serde_json",
  "slint",
- "slint-build",
  "tempfile",
  "tikv-jemallocator",
  "ureq",
  "wgpu",
+]
+
+[[package]]
+name = "itele-ui"
+version = "0.1.0"
+dependencies = [
+ "slint",
+ "slint-build",
 ]
 
 [[package]]

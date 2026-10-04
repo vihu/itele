@@ -7,12 +7,23 @@ publish      = false
 rust-version = "1.93"
 version      = "0.1.0"
 
+[workspace]
+members = ["ui"]
+
+[workspace.dependencies]
+# `unstable-wgpu-30` alone selects no renderer: without a wgpu renderer
+# feature, window creation fails silently inside `run()`.
+slint       = { version = "1.18.1", features = ["renderer-femtovg-wgpu", "unstable-wgpu-30"] }
+slint-build = "1.18.1"
+
 [dependencies]
 camino           = "1.2"
 directories      = "6"
 # Slint decodes images with this crate. Listed to add WebP and GIF, which
 # some providers use for logos, and to scale posters off the UI thread.
 image            = { version = "0.25", default-features = false, features = ["gif", "jpeg", "png", "webp"] }
+# The window, compiled from `ui/` in a crate of its own.
+itele-ui         = { path = "ui" }
 jiff             = "0.2"
 # Secret Service on Linux, Keychain on macOS.
 keyring          = "4.2.0"
@@ -25,9 +36,7 @@ quick-xml        = "0.42.0"
 rusqlite         = { version = "0.40", features = ["bundled"] }
 serde            = { version = "1", features = ["derive"] }
 serde_json       = "1"
-# `unstable-wgpu-30` alone selects no renderer: without a wgpu renderer
-# feature, window creation fails silently inside `run()`.
-slint            = { version = "1.18.1", features = ["renderer-femtovg-wgpu", "unstable-wgpu-30"] }
+slint            = { workspace = true }
 ureq             = { version = "3.4.2", default-features = false, features = ["rustls", "gzip"] }
 # Same crate Slint re-exports; listed only to enable `wgsl` for
 # `wgpu::util::TextureBlitter`.
@@ -38,9 +47,6 @@ tikv-jemallocator = "0.6"
 
 [dev-dependencies]
 tempfile = "3.27.0"
-
-[build-dependencies]
-slint-build = "1.18.1"
 
 # The builds in packaging/: link-time optimization and stripped symbols
 # take the binary from 60 to 36 MB, for a build twice as long.

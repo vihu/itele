@@ -44,9 +44,9 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       # Every failure, not just the first: a platform-only failure shows in full.
-      - run: cargo test --locked --no-fail-fast
+      - run: cargo test --workspace --locked --no-fail-fast
 
   msrv:
     name: Minimum Rust version
@@ -59,7 +59,7 @@ jobs:
       # Keep in step with `rust-version` in Cargo.toml.
       - uses: dtolnay/rust-toolchain@1.93
       - uses: Swatinem/rust-cache@v2
-      - run: cargo check --all-targets --locked
+      - run: cargo check --workspace --all-targets --locked
 
   licenses:
     name: Licences

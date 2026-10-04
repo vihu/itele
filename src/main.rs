@@ -16,10 +16,8 @@ mod tracks;
 mod video;
 mod vod;
 
-/// The compiled Slint UI from `ui/`.
-mod ui {
-    slint::include_modules!();
-}
+// The compiled Slint UI, from the `itele-ui` crate.
+use itele_ui as ui;
 
 use std::sync::Arc;
 
