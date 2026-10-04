@@ -8,6 +8,7 @@ use slint::{ComponentHandle, Model, ModelRc, TimerMode, VecModel};
 use super::{BANNER_TIME, Content, POLL_INTERVAL, Session, with_session};
 use crate::info;
 use crate::playback::{self, Timeline};
+use crate::tracks;
 use crate::ui::Screen;
 
 /// How often the progress of a title playing is saved.
@@ -208,6 +209,27 @@ impl Session {
         self.show_banner();
     }
 
+    /// Opens the audio or subtitle menu with the current track marked;
+    /// nothing to open without tracks.
+    pub(super) fn open_tracks(&self, kind: tracks::Kind) {
+        let Some(app) = self.app.upgrade() else {
+            return;
+        };
+        let items = tracks::menu(&self.engine, kind);
+        if items.is_empty() {
+            return;
+        }
+        let index = items.iter().position(|t| t.selected).unwrap_or(0);
+        app.set_track_items(ModelRc::new(VecModel::from(items)));
+        app.set_tracks_kind(match kind {
+            tracks::Kind::Audio => 0,
+            tracks::Kind::Subtitles => 1,
+        });
+        app.set_tracks_index(index as i32);
+        app.set_tracks_open(true);
+        self.show_banner();
+    }
+
     /// What the player's timeline spans for what is playing.
     pub(super) fn timeline(&self) -> Timeline {
         let state = self.state.borrow();
@@ -239,9 +261,10 @@ impl Session {
                     if Instant::now() < s.banner_until.get() {
                         return;
                     }
-                    // A paused player keeps its controls up.
+                    // A paused player, or an open menu, keeps the controls up.
                     if let Some(app) = s.app.upgrade()
                         && !app.get_player().paused
+                        && !app.get_tracks_open()
                     {
                         app.set_banner_visible(false);
                     }

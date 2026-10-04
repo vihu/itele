@@ -12,6 +12,7 @@ mod logos;
 mod names;
 mod playback;
 mod session;
+mod tracks;
 mod video;
 mod vod;
 

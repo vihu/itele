@@ -37,6 +37,7 @@ use crate::live::{Catalog, View};
 use crate::logos::Logos;
 use crate::names::thousands;
 use crate::playback::{self, SEEK_STEP, VOLUME_STEP};
+use crate::tracks;
 use crate::ui::{AppWindow, ChannelItem, Screen};
 
 /// Delay before the preview follows the selection, so holding Down does
@@ -243,8 +244,10 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
     app.on_details_restart(|| with_session(|s| s.details_play(Start::Beginning)));
     app.on_details_back(|| with_session(|s| s.details_back()));
     app.on_details_season_selected(|i| with_session(|s| s.details_season_selected(i)));
-    app.on_cycle_audio(|| with_session(|s| playback::next_audio(&s.engine)));
-    app.on_cycle_subtitles(|| with_session(|s| playback::next_subtitles(&s.engine)));
+    app.on_open_tracks(|kind| with_session(|s| s.open_tracks(track_kind(kind))));
+    app.on_choose_track(|kind, id| {
+        with_session(|s| tracks::select(&s.engine, track_kind(kind), i64::from(id)));
+    });
 
     session.open_saved();
     session
@@ -267,6 +270,15 @@ enum Start {
     Resume,
     /// From the beginning.
     Beginning,
+}
+
+/// The window's number for a track menu: 0 audio, else subtitles.
+fn track_kind(kind: i32) -> tracks::Kind {
+    if kind == 0 {
+        tracks::Kind::Audio
+    } else {
+        tracks::Kind::Subtitles
+    }
 }
 
 /// Runs `f` with the session, if the window still has one.

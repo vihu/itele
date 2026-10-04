@@ -6,7 +6,7 @@ import { Theme } from "theme.slint";
 import { Button, ButtonKind } from "atoms.slint";
 import { LoginScreen } from "login.slint";
 import { ChannelItem, GroupItem, LiveTvScreen, ProgrammeInfo, UpcomingItem } from "live-tv.slint";
-import { InfoLine, InfoPair, PlayerScreen, PlayerState } from "player.slint";
+import { InfoLine, InfoPair, PlayerScreen, PlayerState, TrackItem } from "player.slint";
 import { GuideCell, GuideDetails, GuideRow, GuideScreen, GuideTick } from "guide.slint";
 import { ProviderItem } from "models.slint";
 import { SearchItem, SearchScreen } from "search.slint";
@@ -14,7 +14,7 @@ import { ProvidersPanel, SwitcherPanel } from "popups.slint";
 import { PosterItem, VodScreen } from "vod.slint";
 import { DetailsScreen, EpisodeItem, SeasonItem, TitleDetails } from "details.slint";
 
-export { ChannelItem, GroupItem, ProviderItem, SearchItem, GuideCell, GuideDetails, GuideRow, GuideTick, EpisodeItem, InfoLine, InfoPair, PlayerState, PosterItem, ProgrammeInfo, SeasonItem, TitleDetails, UpcomingItem }
+export { ChannelItem, GroupItem, ProviderItem, SearchItem, GuideCell, GuideDetails, GuideRow, GuideTick, EpisodeItem, InfoLine, InfoPair, PlayerState, PosterItem, ProgrammeInfo, SeasonItem, TitleDetails, TrackItem, UpcomingItem }
 
 export enum Screen { login, live, guide, search, movies, series, details, player }
 
@@ -151,8 +151,13 @@ export component AppWindow inherits Window {
     callback toggle-mute();
     callback change-volume(float);
     callback set-volume(float);
-    callback cycle-audio();
-    callback cycle-subtitles();
+    // The player's audio or subtitle menu: 0 audio, 1 subtitles.
+    in property <[TrackItem]> track-items;
+    in property <int> tracks-kind;
+    in-out property <bool> tracks-open;
+    in-out property <int> tracks-index;
+    callback open-tracks(int);
+    callback choose-track(int, int);
     callback toggle-fullscreen();
     callback escape();
 
@@ -422,11 +427,15 @@ export component AppWindow inherits Window {
         toggle-mute => {
             root.toggle-mute();
         }
-        cycle-audio => {
-            root.cycle-audio();
+        tracks: root.track-items;
+        tracks-kind: root.tracks-kind;
+        tracks-open <=> root.tracks-open;
+        tracks-index <=> root.tracks-index;
+        open-tracks(kind) => {
+            root.open-tracks(kind);
         }
-        cycle-subtitles => {
-            root.cycle-subtitles();
+        choose-track(kind, id) => {
+            root.choose-track(kind, id);
         }
         toggle-fullscreen => {
             root.toggle-fullscreen();
