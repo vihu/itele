@@ -1,209 +1,28 @@
-// Favorites: the user's channels across providers, in their order, each
-// tagged with its provider; a filter by provider and the selected channel's
-// preview. Layout: .ai-docs/mockups/09-favorites.html.
+// Favorites: the user's channels, movies and series across providers, in
+// their order, each tagged with its provider; a filter by provider, and the
+// selected channel's preview. Layout: .ai-docs/mockups/09-favorites.html.
 
 import { ListView } from "std-widgets.slint";
 import { Theme } from "theme.slint";
-import { ChannelLogo, Hint, ProviderTag } from "atoms.slint";
-import { ChannelItem, ProgrammeInfo, ProviderItem, UpcomingItem } from "models.slint";
+import { Hint } from "atoms.slint";
+import { ChannelItem, PosterItem, ProgrammeInfo, ProviderItem, UpcomingItem } from "models.slint";
 import { ChannelPreview } from "preview.slint";
-
-// One favorite: its place, logo, name and provider, what is on, the heart.
-component FavoriteRow inherits Rectangle {
-    in property <ChannelItem> item;
-    in property <bool> selected;
-    callback clicked();
-    callback double-clicked();
-    callback heart-clicked();
-    height: 76px;
-    border-radius: Theme.radius-md;
-    background: selected ? Theme.surface-2 : touch.has-hover || heart.has-hover ? Theme.surface-1 : transparent;
-    border-width: selected ? 1px : 0px;
-    border-color: Theme.accent-line;
-    opacity: item.gone ? 0.45 : 1;
-    // Under the row's content, so the heart takes its own clicks.
-    touch := TouchArea {
-        mouse-cursor: pointer;
-        clicked => {
-            root.clicked();
-        }
-        double-clicked => {
-            root.double-clicked();
-        }
-    }
-    HorizontalLayout {
-        padding-left: 12px;
-        padding-right: 12px;
-        spacing: 14px;
-        VerticalLayout {
-            alignment: center;
-            Image {
-                source: @image-url("icons/grip.svg");
-                width: 18px;
-                height: 18px;
-                colorize: Theme.text-3;
-                opacity: root.selected || touch.has-hover ? 1 : 0;
-            }
-        }
-        Text {
-            width: 26px;
-            text: root.item.number;
-            color: root.selected ? Theme.accent : Theme.text-3;
-            font-size: Theme.fs-sm;
-            font-weight: 700;
-            horizontal-alignment: right;
-            vertical-alignment: center;
-        }
-        VerticalLayout {
-            alignment: center;
-            ChannelLogo {
-                short: root.item.short;
-                tint: root.item.tint;
-                logo: root.item.logo;
-                has-logo: root.item.has-logo;
-            }
-        }
-        VerticalLayout {
-            alignment: center;
-            spacing: 4px;
-            horizontal-stretch: 11;
-            Text {
-                text: root.item.name;
-                color: Theme.text;
-                font-size: Theme.fs-md;
-                font-weight: 600;
-                overflow: elide;
-            }
-            HorizontalLayout {
-                alignment: start;
-                ProviderTag {
-                    text: root.item.provider;
-                    hue: root.item.hue;
-                }
-            }
-        }
-        VerticalLayout {
-            alignment: center;
-            spacing: 6px;
-            horizontal-stretch: 10;
-            Text {
-                text: root.item.gone ? root.item.group : root.item.now-title != "" ? root.item.now-title : "No guide";
-                color: root.item.now-title != "" ? Theme.text : Theme.text-3;
-                font-size: Theme.fs-sm;
-                font-weight: 600;
-                overflow: elide;
-            }
-            if root.item.now-progress >= 0: Rectangle {
-                height: 3px;
-                border-radius: 1.5px;
-                background: #ffffff29;
-                Rectangle {
-                    x: 0;
-                    width: parent.width * root.item.now-progress;
-                    border-radius: 1.5px;
-                    background: Theme.accent;
-                }
-            }
-            if root.item.gone || root.item.next-title != "": Text {
-                text: root.item.gone ? "Kept in case it comes back" : root.item.next-time + " · " + root.item.next-title;
-                color: Theme.text-3;
-                font-size: Theme.fs-xs;
-                overflow: elide;
-            }
-        }
-        VerticalLayout {
-            alignment: center;
-            Rectangle {
-                width: 24px;
-                height: 24px;
-                Image {
-                    source: @image-url("icons/heart-fill.svg");
-                    width: 16px;
-                    height: 16px;
-                    colorize: heart.has-hover ? Theme.accent-hover : Theme.accent;
-                }
-                heart := TouchArea {
-                    mouse-cursor: pointer;
-                    clicked => {
-                        root.heart-clicked();
-                    }
-                }
-            }
-        }
-    }
-}
-
-// All providers, or one, each with its hue.
-component ProviderFilter inherits Rectangle {
-    in property <[ProviderItem]> providers;
-    in property <int> selected;
-    callback chosen(int);
-    height: 40px;
-    width: row.preferred-width;
-    border-radius: Theme.radius-md;
-    background: Theme.surface-2;
-    row := HorizontalLayout {
-        padding: 3px;
-        spacing: 2px;
-        Rectangle {
-            width: all.preferred-width + 24px;
-            border-radius: 7px;
-            background: root.selected == -1 ? Theme.surface-4 : transparent;
-            all := Text {
-                text: "All providers";
-                color: root.selected == -1 || all-touch.has-hover ? Theme.text : Theme.text-2;
-                font-size: Theme.fs-sm;
-                font-weight: 600;
-            }
-            all-touch := TouchArea {
-                mouse-cursor: pointer;
-                clicked => {
-                    root.chosen(-1);
-                }
-            }
-        }
-        for provider[i] in root.providers: Rectangle {
-            width: option.preferred-width + 24px;
-            border-radius: 7px;
-            background: i == root.selected ? Theme.surface-4 : transparent;
-            option := HorizontalLayout {
-                spacing: 7px;
-                alignment: center;
-                VerticalLayout {
-                    alignment: center;
-                    Rectangle {
-                        width: 7px;
-                        height: 7px;
-                        border-radius: 3.5px;
-                        background: provider.hue;
-                    }
-                }
-                Text {
-                    text: provider.name;
-                    color: i == root.selected || touch.has-hover ? Theme.text : Theme.text-2;
-                    font-size: Theme.fs-sm;
-                    font-weight: 600;
-                    vertical-alignment: center;
-                }
-            }
-            touch := TouchArea {
-                mouse-cursor: pointer;
-                clicked => {
-                    root.chosen(i);
-                }
-            }
-        }
-    }
-}
+import { FavoriteRow, ProviderFilter } from "favorite-rows.slint";
+import { TitleGrid } from "title-grid.slint";
 
 export component FavoritesScreen inherits Rectangle {
     in property <[ChannelItem]> channels;
     in property <int> channel-index;
-    // Every favorite channel, across providers; none shows how to add one.
-    in property <int> count;
+    // Favorite channels, movies and series, across providers.
+    in property <[int]> counts;
     in property <[ProviderItem]> providers;
     // The provider shown; -1 is every provider.
     in property <int> filter: -1;
+    // The tab showing: 0 channels, 1 movies, 2 series.
+    in property <int> tab;
+    // The favorite movies or series of the tab showing.
+    in property <[PosterItem]> titles;
+    in-out property <int> title-index;
     in property <image> frame;
     in property <string> video-note;
     in property <ProgrammeInfo> programme;
@@ -212,15 +31,19 @@ export component FavoritesScreen inherits Rectangle {
     out property <length> video-height: preview.video-height;
     callback channel-selected(int);
     callback watch();
-    // F, Delete or the heart: the favorite at a row goes.
+    // F, Delete or the heart: the favorite channel at a row goes.
     callback favorite(int);
     // Alt+Up and Alt+Down: the selected favorite moves.
     callback reorder(int);
     callback filter-selected(int);
+    callback tab-selected(int);
+    callback open-title(int);
+    callback remove-title(int);
     callback navigate(int);
     // Rows `first` to `first + count` are on screen, for lazy logos.
     callback rows-visible(int, int);
 
+    property <int> count: root.counts[0];
     property <int> first-visible: floor(-list.content-y / 76px);
     changed first-visible => {
         root.rows-visible(root.first-visible, ceil(list.visible-height / 76px) + 1);
@@ -248,11 +71,42 @@ export component FavoritesScreen inherits Rectangle {
         }
     }
 
+    // The arrows, Enter and F on the Movies and Series tabs.
+    function title-key(event: KeyEvent) -> bool {
+        let key = event.text.to-lowercase();
+        if (event.text == Key.LeftArrow) {
+            grid.select(root.title-index - 1);
+        } else if (event.text == Key.RightArrow) {
+            grid.select(root.title-index + 1);
+        } else if (event.text == Key.UpArrow) {
+            grid.select(root.title-index - grid.columns);
+        } else if (event.text == Key.DownArrow) {
+            grid.select(root.title-index + grid.columns);
+        } else if (event.text == Key.Return && root.titles.length > 0) {
+            root.open-title(root.title-index);
+        } else if ((key == "f" || event.text == Key.Delete) && root.titles.length > 0) {
+            root.remove-title(root.title-index);
+        } else {
+            return false;
+        }
+        true
+    }
+
     background: Theme.bg;
     keys := FocusScope {
         key-pressed(event) => {
             let key = event.text.to-lowercase();
-            if (event.modifiers.alt && event.text == Key.UpArrow) {
+            if (event.text == Key.Tab) {
+                root.tab-selected(root.tab + 1);
+            } else if (event.text == Key.Backtab) {
+                root.tab-selected(root.tab - 1);
+            } else if (event.text == Key.Escape) {
+                root.navigate(1);
+            } else if (event.text == "/" || (event.modifiers.control && key == "k")) {
+                root.navigate(5);
+            } else if (root.tab != 0) {
+                return root.title-key(event) ? accept : reject;
+            } else if (event.modifiers.alt && event.text == Key.UpArrow) {
                 root.reorder(-1);
             } else if (event.modifiers.alt && event.text == Key.DownArrow) {
                 root.reorder(1);
@@ -272,10 +126,6 @@ export component FavoritesScreen inherits Rectangle {
                 root.watch();
             } else if ((key == "f" || event.text == Key.Delete) && root.current.name != "") {
                 root.favorite(root.channel-index);
-            } else if (event.text == Key.Escape) {
-                root.navigate(1);
-            } else if (event.text == "/" || (event.modifiers.control && key == "k")) {
-                root.navigate(5);
             } else {
                 return reject;
             }
@@ -324,33 +174,77 @@ export component FavoritesScreen inherits Rectangle {
                         }
                     }
                 }
+                // Channels, movies, series.
                 Rectangle {
-                    height: 1px;
-                    background: Theme.line;
+                    height: 44px;
+                    Rectangle {
+                        y: parent.height - 1px;
+                        height: 1px;
+                        background: Theme.line;
+                    }
+                    HorizontalLayout {
+                        padding-left: 36px;
+                        spacing: 4px;
+                        alignment: start;
+                        for name[i] in ["Channels", "Movies", "Series"]: Rectangle {
+                            width: label.preferred-width + 28px;
+                            label := HorizontalLayout {
+                                spacing: 8px;
+                                alignment: center;
+                                Text {
+                                    text: name;
+                                    color: i == root.tab || tab-touch.has-hover ? Theme.text : Theme.text-2;
+                                    font-size: Theme.fs-md;
+                                    font-weight: 600;
+                                    vertical-alignment: center;
+                                }
+                                Text {
+                                    text: root.counts[i];
+                                    color: Theme.text-3;
+                                    font-size: Theme.fs-sm;
+                                    font-weight: 500;
+                                    vertical-alignment: center;
+                                }
+                            }
+                            Rectangle {
+                                y: parent.height - 2px;
+                                height: 2px;
+                                background: i == root.tab ? Theme.accent : transparent;
+                            }
+                            tab-touch := TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => {
+                                    root.tab-selected(i);
+                                    keys.focus();
+                                }
+                            }
+                        }
+                    }
                 }
                 Rectangle {
                     height: 10px;
                 }
-                if root.count == 0: VerticalLayout {
+                if root.counts[root.tab] == 0: VerticalLayout {
                     padding-left: 36px;
                     padding-right: 36px;
                     padding-top: 40px;
                     spacing: 8px;
                     alignment: start;
                     Text {
-                        text: "No favorites yet";
+                        text: root.tab == 0 ? "No favorite channels yet" : root.tab == 1 ? "No favorite movies yet" : "No favorite series yet";
                         color: Theme.text;
                         font-size: Theme.fs-xl;
                         font-weight: 700;
                     }
                     Text {
-                        text: "Press F on any channel in Live TV or the guide, or click its heart. Favorites from every provider gather here, in the order you choose.";
+                        text: root.tab == 0 ? "Press F on any channel in Live TV or the guide, or click its heart. Favorites from every provider gather here, in the order you choose."
+                            : "Open a title and press F, or click Favorite on its page. Favorites from every provider gather here.";
                         color: Theme.text-2;
                         font-size: Theme.fs-md;
                         wrap: word-wrap;
                     }
                 }
-                if root.count > 0 && root.channels.length == 0: VerticalLayout {
+                if root.counts[root.tab] > 0 && (root.tab == 0 ? root.channels.length : root.titles.length) == 0: VerticalLayout {
                     padding-left: 36px;
                     padding-top: 40px;
                     alignment: start;
@@ -360,32 +254,46 @@ export component FavoritesScreen inherits Rectangle {
                         font-size: Theme.fs-md;
                     }
                 }
-                HorizontalLayout {
-                    padding-left: 24px;
-                    padding-right: 24px;
+                Rectangle {
                     vertical-stretch: 1;
-                    list := ListView {
-                        visible: root.count > 0;
-                        for channel[i] in root.channels: FavoriteRow {
-                            item: channel;
-                            selected: i == root.channel-index;
-                            clicked => {
-                                root.channel-selected(i);
-                                keys.focus();
+                    HorizontalLayout {
+                        padding-left: 24px;
+                        padding-right: 24px;
+                        list := ListView {
+                            visible: root.tab == 0 && root.count > 0;
+                            for channel[i] in root.channels: FavoriteRow {
+                                item: channel;
+                                selected: i == root.channel-index;
+                                clicked => {
+                                    root.channel-selected(i);
+                                    keys.focus();
+                                }
+                                double-clicked => {
+                                    root.channel-selected(i);
+                                    root.watch();
+                                }
+                                heart-clicked => {
+                                    root.favorite(i);
+                                }
                             }
-                            double-clicked => {
-                                root.channel-selected(i);
-                                root.watch();
-                            }
-                            heart-clicked => {
-                                root.favorite(i);
-                            }
+                        }
+                    }
+                    grid := TitleGrid {
+                        x: 36px;
+                        width: parent.width - 72px;
+                        visible: root.tab != 0;
+                        items: root.titles;
+                        index <=> root.title-index;
+                        open(i) => {
+                            keys.focus();
+                            root.open-title(i);
                         }
                     }
                 }
             }
             preview := ChannelPreview {
-                visible: root.count > 0;
+                visible: root.tab == 0 && root.count > 0;
+                width: root.tab == 0 ? 460px : 0px;
                 frame: root.frame;
                 video-note: root.video-note;
                 current: root.current;
@@ -413,20 +321,24 @@ export component FavoritesScreen inherits Rectangle {
                 spacing: 22px;
                 alignment: start;
                 Hint {
-                    keys: ["↑", "↓"];
+                    keys: root.tab == 0 ? ["↑", "↓"] : ["←", "→", "↑", "↓"];
                     label: "Choose";
                 }
                 Hint {
                     keys: ["Enter"];
-                    label: "Watch";
+                    label: root.tab == 0 ? "Watch" : "Open";
                 }
-                Hint {
+                if root.tab == 0: Hint {
                     keys: ["Alt", "↑", "↓"];
                     label: "Move";
                 }
                 Hint {
                     keys: ["F"];
                     label: "Remove";
+                }
+                Hint {
+                    keys: ["Tab"];
+                    label: "Channels, movies, series";
                 }
             }
         }

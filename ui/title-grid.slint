@@ -1,0 +1,54 @@
+// A grid of movie or series posters, each tagged with its provider: the
+// Movies and Series tabs of the Favorites screen.
+
+import { ListView } from "std-widgets.slint";
+import { PosterItem } from "models.slint";
+import { PosterCard } from "vod.slint";
+
+export component TitleGrid inherits Rectangle {
+    in property <[PosterItem]> items;
+    in-out property <int> index;
+    // A click opens the title.
+    callback open(int);
+    // Titles on a row, for the arrow keys.
+    out property <int> columns: max(1, floor((list.visible-width + root.gap) / (root.min-card + root.gap)));
+
+    property <length> gap: 22px;
+    property <length> min-card: 150px;
+    property <length> card-width: (list.visible-width - (root.columns - 1) * root.gap) / root.columns;
+    // The poster, the title and details, and the provider tag.
+    property <length> row-height: root.card-width * 1.5 + 100px;
+    property <int> row-count: ceil(root.items.length / root.columns);
+
+    // Moves the selection to `target` and scrolls it into view.
+    public function select(target: int) {
+        if (root.items.length > 0) {
+            root.index = max(0, min(root.items.length - 1, target));
+            let row = floor(root.index / root.columns);
+            if (row * root.row-height < -list.content-y) {
+                list.content-y = -row * root.row-height;
+            } else if ((row + 1) * root.row-height > -list.content-y + list.visible-height) {
+                list.content-y = -((row + 1) * root.row-height - list.visible-height);
+            }
+        }
+    }
+
+    list := ListView {
+        for r in root.row-count: HorizontalLayout {
+            height: root.row-height;
+            spacing: root.gap;
+            alignment: start;
+            for c in root.columns: PosterCard {
+                property <int> i: r * root.columns + c;
+                width: root.card-width;
+                visible: self.i < root.items.length;
+                item: root.items[self.i];
+                selected: self.i == root.index;
+                clicked => {
+                    root.index = self.i;
+                    root.open(self.i);
+                }
+            }
+        }
+    }
+}

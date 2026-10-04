@@ -10,6 +10,7 @@ mod about;
 mod browse;
 mod catchup;
 mod details;
+mod favorite_titles;
 mod favorites;
 mod grid;
 mod guide;
@@ -113,6 +114,7 @@ struct State {
     row_guides: Vec<GuideKey>,
     /// The group Live TV showed before the Favorites screen took it.
     live_group: Option<usize>,
+    favorite_titles: favorite_titles::FavoriteTitles,
     /// Days of catch-up each row keeps; 0 for none.
     row_archive: Vec<u32>,
     /// Rows the channel list last reported on screen.
@@ -261,6 +263,10 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
     app.on_toggle_favorite(|row| with_session(|s| s.toggle_favorite(row)));
     app.on_move_favorite(|delta| with_session(|s| s.move_favorite(delta)));
     app.on_filter_favorites(|i| with_session(|s| s.filter_favorites(i)));
+    app.on_favorites_tab_selected(|tab| with_session(|s| s.favorites_tab(tab)));
+    app.on_open_favorite_title(|i| with_session(|s| s.open_favorite_title(i)));
+    app.on_remove_favorite_title(|i| with_session(|s| s.remove_favorite_title(i)));
+    app.on_details_favorite(|| with_session(|s| s.toggle_page_favorite()));
     app.on_guide_rows_visible(|first, count| with_session(|s| s.grid_rows_visible(first, count)));
     app.on_guide_move(|dx, dy| with_session(|s| s.grid_move(dx, dy)));
     app.on_guide_page(|direction| with_session(|s| s.grid_page(direction)));

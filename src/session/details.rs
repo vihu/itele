@@ -65,6 +65,9 @@ impl Session {
             self.apply_progress();
             app.invoke_reveal_vod();
         }
+        if origin == Screen::Favorites {
+            self.fill_favorite_titles();
+        }
     }
 
     /// Plays the page's movie, or the selected episode of its series,
@@ -155,13 +158,16 @@ impl Session {
             return;
         };
         page.resume_on = self.settings.borrow().resume;
+        page.favorite = self.is_favorite(&page.as_favorite());
         let kind = page.kind();
+        let origin = page.origin;
         self.state.borrow_mut().page = Some(page);
         self.request_page_art();
         self.push_page();
-        app.set_details_rail(match kind {
-            Kind::Movies => 3,
-            Kind::Series => 4,
+        app.set_details_rail(match (origin, kind) {
+            (Screen::Favorites, _) => 7,
+            (_, Kind::Movies) => 3,
+            (_, Kind::Series) => 4,
         });
         app.set_details_series(kind == Kind::Series);
         self.show(Screen::Details);

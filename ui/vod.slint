@@ -5,13 +5,13 @@
 
 import { ListView } from "std-widgets.slint";
 import { Theme } from "theme.slint";
-import { Hint } from "atoms.slint";
+import { Hint, ProviderTag } from "atoms.slint";
 import { GroupItem, PosterItem } from "models.slint";
 import { GroupsColumn } from "groups.slint";
 
 export { PosterItem }
 
-component PosterCard inherits Rectangle {
+export component PosterCard inherits Rectangle {
     in property <PosterItem> item;
     in property <bool> selected;
     callback clicked();
@@ -115,6 +115,14 @@ component PosterCard inherits Rectangle {
                     font-weight: 600;
                     vertical-alignment: center;
                 }
+            }
+        }
+        if root.item.provider != "": HorizontalLayout {
+            padding-top: 6px;
+            alignment: start;
+            ProviderTag {
+                text: root.item.provider;
+                hue: root.item.hue;
             }
         }
     }

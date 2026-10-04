@@ -155,6 +155,8 @@ export component DetailsScreen inherits Rectangle {
     callback back();
     callback season-selected(int);
     callback navigate(int);
+    // F or the heart: the title joins the favorites, or leaves.
+    callback favorite();
 
     public function focus-keys() {
         keys.focus();
@@ -206,6 +208,8 @@ export component DetailsScreen inherits Rectangle {
                 root.play();
             } else if (key == "b" && root.can-restart) {
                 root.restart();
+            } else if (key == "f") {
+                root.favorite();
             } else if (event.text == Key.Escape || event.text == Key.Backspace) {
                 root.back();
             } else if (root.series && event.text == Key.UpArrow) {
@@ -371,6 +375,16 @@ export component DetailsScreen inherits Rectangle {
                                 has-icon: true;
                                 clicked => {
                                     root.restart();
+                                }
+                            }
+                            Button {
+                                text: "Favorite";
+                                hint: "F";
+                                icon: root.details.favorite ? @image-url("icons/heart-fill.svg") : @image-url("icons/heart.svg");
+                                has-icon: true;
+                                on: root.details.favorite;
+                                clicked => {
+                                    root.favorite();
                                 }
                             }
                         }

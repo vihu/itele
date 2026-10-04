@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use itele::favorites::{Favorite, Kind as FavoriteKind};
 use itele::history::{Entry, Kind as Watched, Progress};
 use itele::xtream::{Credentials, Details, Movie, MovieInfo, Show, ShowInfo};
 use slint::{Image, Model, SharedString, VecModel};
@@ -29,6 +30,8 @@ pub(super) struct Page {
     /// The user resumes titles (a setting); otherwise every title plays
     /// from the start and no page offers Resume.
     pub(super) resume_on: bool,
+    /// The title is one of the user's favorites.
+    pub(super) favorite: bool,
 }
 
 /// What the page is about, with the provider's details once known.
@@ -87,6 +90,36 @@ impl Page {
             note,
             origin,
             resume_on: true,
+            favorite: false,
+        }
+    }
+
+    /// The page's title as a favorite: its provider, id, name, poster and
+    /// year now.
+    pub(super) fn as_favorite(&self) -> Favorite {
+        let (kind, id, title, poster, year) = match &self.subject {
+            Subject::Movie { movie, .. } => (
+                FavoriteKind::Movie,
+                movie.id.0,
+                &movie.name,
+                &movie.poster,
+                movie.year,
+            ),
+            Subject::Show { show, .. } => (
+                FavoriteKind::Series,
+                show.id.0,
+                &show.name,
+                &show.poster,
+                show.year,
+            ),
+        };
+        Favorite {
+            provider: self.provider.clone(),
+            kind,
+            id: id.to_string(),
+            title: title.clone(),
+            poster: poster.clone().unwrap_or_default(),
+            year,
         }
     }
 
@@ -213,10 +246,10 @@ impl Page {
             has_backdrop: self.backdrop.is_some(),
             backdrop: self.backdrop.clone().unwrap_or_default(),
             note: self.note.as_str().into(),
-            back_label: if self.origin == Screen::Search {
-                "Search"
-            } else {
-                back_label
+            back_label: match self.origin {
+                Screen::Search => "Search",
+                Screen::Favorites => "Favorites",
+                _ => back_label,
             }
             .into(),
             play_label: if resume.is_some() { "Resume" } else { "Play" }.into(),
@@ -225,6 +258,7 @@ impl Page {
                 .unwrap_or_default()
                 .into(),
             restart: resume.is_some(),
+            favorite: self.favorite,
         }
     }
 }

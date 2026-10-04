@@ -1,0 +1,194 @@
+// The rows of the Favorites screen: a favorite channel, and the provider
+// filter. Layout: .ai-docs/mockups/09-favorites.html.
+
+import { Theme } from "theme.slint";
+import { ChannelLogo, ProviderTag } from "atoms.slint";
+import { ChannelItem, ProviderItem } from "models.slint";
+
+// One favorite: its place, logo, name and provider, what is on, the heart.
+export component FavoriteRow inherits Rectangle {
+    in property <ChannelItem> item;
+    in property <bool> selected;
+    callback clicked();
+    callback double-clicked();
+    callback heart-clicked();
+    height: 76px;
+    border-radius: Theme.radius-md;
+    background: selected ? Theme.surface-2 : touch.has-hover || heart.has-hover ? Theme.surface-1 : transparent;
+    border-width: selected ? 1px : 0px;
+    border-color: Theme.accent-line;
+    opacity: item.gone ? 0.45 : 1;
+    // Under the row's content, so the heart takes its own clicks.
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+        double-clicked => {
+            root.double-clicked();
+        }
+    }
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        spacing: 14px;
+        VerticalLayout {
+            alignment: center;
+            Image {
+                source: @image-url("icons/grip.svg");
+                width: 18px;
+                height: 18px;
+                colorize: Theme.text-3;
+                opacity: root.selected || touch.has-hover ? 1 : 0;
+            }
+        }
+        Text {
+            width: 26px;
+            text: root.item.number;
+            color: root.selected ? Theme.accent : Theme.text-3;
+            font-size: Theme.fs-sm;
+            font-weight: 700;
+            horizontal-alignment: right;
+            vertical-alignment: center;
+        }
+        VerticalLayout {
+            alignment: center;
+            ChannelLogo {
+                short: root.item.short;
+                tint: root.item.tint;
+                logo: root.item.logo;
+                has-logo: root.item.has-logo;
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            spacing: 4px;
+            horizontal-stretch: 11;
+            Text {
+                text: root.item.name;
+                color: Theme.text;
+                font-size: Theme.fs-md;
+                font-weight: 600;
+                overflow: elide;
+            }
+            HorizontalLayout {
+                alignment: start;
+                ProviderTag {
+                    text: root.item.provider;
+                    hue: root.item.hue;
+                }
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            spacing: 6px;
+            horizontal-stretch: 10;
+            Text {
+                text: root.item.gone ? root.item.group : root.item.now-title != "" ? root.item.now-title : "No guide";
+                color: root.item.now-title != "" ? Theme.text : Theme.text-3;
+                font-size: Theme.fs-sm;
+                font-weight: 600;
+                overflow: elide;
+            }
+            if root.item.now-progress >= 0: Rectangle {
+                height: 3px;
+                border-radius: 1.5px;
+                background: #ffffff29;
+                Rectangle {
+                    x: 0;
+                    width: parent.width * root.item.now-progress;
+                    border-radius: 1.5px;
+                    background: Theme.accent;
+                }
+            }
+            if root.item.gone || root.item.next-title != "": Text {
+                text: root.item.gone ? "Kept in case it comes back" : root.item.next-time + " · " + root.item.next-title;
+                color: Theme.text-3;
+                font-size: Theme.fs-xs;
+                overflow: elide;
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 24px;
+                height: 24px;
+                Image {
+                    source: @image-url("icons/heart-fill.svg");
+                    width: 16px;
+                    height: 16px;
+                    colorize: heart.has-hover ? Theme.accent-hover : Theme.accent;
+                }
+                heart := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => {
+                        root.heart-clicked();
+                    }
+                }
+            }
+        }
+    }
+}
+
+// All providers, or one, each with its hue.
+export component ProviderFilter inherits Rectangle {
+    in property <[ProviderItem]> providers;
+    in property <int> selected;
+    callback chosen(int);
+    height: 40px;
+    width: row.preferred-width;
+    border-radius: Theme.radius-md;
+    background: Theme.surface-2;
+    row := HorizontalLayout {
+        padding: 3px;
+        spacing: 2px;
+        Rectangle {
+            width: all.preferred-width + 24px;
+            border-radius: 7px;
+            background: root.selected == -1 ? Theme.surface-4 : transparent;
+            all := Text {
+                text: "All providers";
+                color: root.selected == -1 || all-touch.has-hover ? Theme.text : Theme.text-2;
+                font-size: Theme.fs-sm;
+                font-weight: 600;
+            }
+            all-touch := TouchArea {
+                mouse-cursor: pointer;
+                clicked => {
+                    root.chosen(-1);
+                }
+            }
+        }
+        for provider[i] in root.providers: Rectangle {
+            width: option.preferred-width + 24px;
+            border-radius: 7px;
+            background: i == root.selected ? Theme.surface-4 : transparent;
+            option := HorizontalLayout {
+                spacing: 7px;
+                alignment: center;
+                VerticalLayout {
+                    alignment: center;
+                    Rectangle {
+                        width: 7px;
+                        height: 7px;
+                        border-radius: 3.5px;
+                        background: provider.hue;
+                    }
+                }
+                Text {
+                    text: provider.name;
+                    color: i == root.selected || touch.has-hover ? Theme.text : Theme.text-2;
+                    font-size: Theme.fs-sm;
+                    font-weight: 600;
+                    vertical-alignment: center;
+                }
+            }
+            touch := TouchArea {
+                mouse-cursor: pointer;
+                clicked => {
+                    root.chosen(i);
+                }
+            }
+        }
+    }
+}

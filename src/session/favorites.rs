@@ -3,11 +3,11 @@
 //! filter and the user's order.
 
 use itele::favorites::{Favorite, Kind};
-use slint::{ComponentHandle, ModelRc, VecModel};
+use slint::{ModelRc, VecModel};
 
 use super::timefmt::now;
 use super::{Session, State};
-use crate::ui::{Screen, Shell};
+use crate::ui::Screen;
 
 impl Session {
     /// Shows the saved favorites; once, at start.
@@ -81,6 +81,7 @@ impl Session {
         if let Some(group) = group {
             self.select_group(group);
         }
+        self.fill_favorite_titles();
         self.show(Screen::Favorites);
         self.resume_preview();
         if let Some(app) = self.app.upgrade() {
@@ -111,19 +112,22 @@ impl Session {
             app.set_favorites_filter(index);
         }
         self.refresh_favorites_with(|state| state.catalog.set_favorites_filter(provider));
+        self.fill_favorite_titles();
     }
 
-    /// Forgets `provider`'s favorites, when it signs out.
+    /// Forgets `provider`'s favorites, when it signs out; the filter,
+    /// which counts providers, shows every one again.
     pub(super) fn forget_favorites(&self, provider: &str) {
         if let Some(store) = self.favorites.borrow().as_ref()
             && let Err(e) = store.remove_provider(provider)
         {
             eprintln!("favorites: {e}");
         }
-        let mut state = self.state.borrow_mut();
-        if state.catalog.favorites_filter() == Some(provider) {
-            state.catalog.set_favorites_filter(None);
+        self.state.borrow_mut().catalog.set_favorites_filter(None);
+        if let Some(app) = self.app.upgrade() {
+            app.set_favorites_filter(-1);
         }
+        self.fill_favorite_titles();
     }
 
     /// Reads the favorites again and shows them, keeping the group and the
@@ -144,7 +148,6 @@ impl Session {
             .as_ref()
             .and_then(|store| store.list(Kind::Channel).ok())
             .unwrap_or_default();
-        let count = list.len();
         let selected = usize::try_from(app.get_channel_index()).ok();
         let (group, kept, groups, listed) = {
             let mut state = self.state.borrow_mut();
@@ -165,7 +168,7 @@ impl Session {
             state.group = shift(state.group);
             (state.group, kept, state.catalog.group_items(), listed)
         };
-        app.global::<Shell>().set_favorite_count(count as i32);
+        self.push_favorite_counts();
         app.set_groups(ModelRc::new(VecModel::from(groups)));
         self.select_group(group);
         let row = {

@@ -62,6 +62,16 @@ export component AppWindow inherits Window {
     callback toggle-favorite(int);
     callback move-favorite(int);
     callback filter-favorites(int);
+    // Favorite channels, movies and series; the Favorites screen's tab (0
+    // channels, 1 movies, 2 series) and its movies or series.
+    in property <[int]> favorite-counts: [0, 0, 0];
+    in property <int> favorites-tab;
+    in property <[PosterItem]> favorite-titles;
+    in-out property <int> favorite-title-index;
+    callback favorites-tab-selected(int);
+    callback open-favorite-title(int);
+    callback remove-favorite-title(int);
+    callback details-favorite <=> details-screen.favorite;
 
     // Guide.
     in property <[GuideRow]> guide-rows;
@@ -308,9 +318,21 @@ export component AppWindow inherits Window {
                 visible: root.screen == Screen.favorites;
                 channels: root.channels;
                 channel-index: root.channel-index;
-                count: Shell.favorite-count;
+                counts: root.favorite-counts;
                 providers: root.providers;
                 filter: root.favorites-filter;
+                tab: root.favorites-tab;
+                titles: root.favorite-titles;
+                title-index <=> root.favorite-title-index;
+                tab-selected(i) => {
+                    root.favorites-tab-selected(i);
+                }
+                open-title(i) => {
+                    root.open-favorite-title(i);
+                }
+                remove-title(i) => {
+                    root.remove-favorite-title(i);
+                }
                 frame: root.screen == Screen.favorites ? root.frame : @image-url("");
                 video-note: root.video-note;
                 programme: root.programme;

@@ -134,6 +134,12 @@ impl<T: Tile> Catalog<T> {
             .collect()
     }
 
+    /// `provider`'s title with id `key`, as [`Tile::key`] gives it.
+    pub fn find(&self, provider: &str, key: &str) -> Option<&T> {
+        let source = self.sources.iter().find(|s| s.id == provider)?;
+        source.shelf.titles.iter().find(|t| t.key() == key)
+    }
+
     /// The provider and title at `index` of `group`.
     pub fn title(&self, group: usize, index: usize) -> Option<(&Source<T>, &T)> {
         let g = self.groups.get(group)?;
@@ -293,6 +299,8 @@ fn poster_item<T: Tile>(title: &T, provider: &str) -> PosterItem {
         has_poster: false,
         progress: -1.0,
         watched: false,
+        provider: SharedString::new(),
+        hue: slint::Color::default(),
     }
 }
 
