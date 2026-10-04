@@ -84,7 +84,8 @@ impl Session {
         // At the end mpv has no position left to read.
         self.save_at_end();
         self.back();
-        if let Some(entry) = finished.filter(|e| e.kind == itele::history::Kind::Episode) {
+        let next = self.settings.borrow().next_episode;
+        if let Some(entry) = finished.filter(|e| next && e.kind == itele::history::Kind::Episode) {
             self.play_next_episode(&entry.id);
         }
     }

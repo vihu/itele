@@ -1,7 +1,10 @@
-// Controls of the Settings screen: section items, a row naming a setting
-// beside its control, a segmented choice, and a stepper.
+// Controls of the Settings screen: section items, a section header, a row
+// naming a setting beside its control, a segmented choice, a stepper, a
+// switch, and a dropdown.
 
+import { ListView } from "std-widgets.slint";
 import { Theme } from "theme.slint";
+import { Button, ButtonKind } from "atoms.slint";
 
 export component SectionItem inherits Rectangle {
     in property <image> icon;
@@ -144,6 +147,171 @@ export component Stepper inherits Rectangle {
                 mouse-cursor: pointer;
                 clicked => {
                     root.step(sign);
+                }
+            }
+        }
+    }
+}
+
+// A section's title, what it is for, and its main button.
+export component PanelHeader inherits HorizontalLayout {
+    in property <string> title;
+    in property <string> description;
+    in property <string> action;
+    in property <image> icon;
+    in property <bool> enabled: true;
+    callback clicked();
+    spacing: 24px;
+    padding-bottom: 10px;
+    VerticalLayout {
+        spacing: 4px;
+        horizontal-stretch: 1;
+        Text {
+            text: root.title;
+            color: Theme.text;
+            font-size: Theme.fs-xl;
+            font-weight: 700;
+        }
+        Text {
+            text: root.description;
+            color: Theme.text-3;
+            font-size: Theme.fs-sm;
+            wrap: word-wrap;
+        }
+    }
+    if root.action != "": VerticalLayout {
+        alignment: end;
+        Button {
+            kind: ButtonKind.secondary;
+            text: root.action;
+            icon: root.icon;
+            has-icon: true;
+            enabled: root.enabled;
+            clicked => {
+                root.clicked();
+            }
+        }
+    }
+}
+
+// On or off.
+export component Toggle inherits Rectangle {
+    in property <bool> on;
+    callback toggled();
+    width: 44px;
+    height: 26px;
+    border-radius: 13px;
+    background: root.on ? Theme.accent : Theme.surface-4;
+    Rectangle {
+        x: root.on ? 21px : 3px;
+        y: 3px;
+        width: 20px;
+        height: 20px;
+        border-radius: 10px;
+        background: root.on ? Theme.accent-ink : Theme.text-2;
+        animate x { duration: 150ms; easing: ease-out; }
+    }
+    TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.toggled();
+        }
+    }
+}
+
+// One of many choices, picked from a list below it.
+export component Select inherits Rectangle {
+    in property <[string]> options;
+    in property <int> selected;
+    callback chosen(int);
+    width: 200px;
+    height: 40px;
+    border-radius: Theme.radius-md;
+    background: touch.has-hover ? Theme.surface-3 : Theme.surface-2;
+    HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 12px;
+        spacing: 10px;
+        Text {
+            text: root.selected >= 0 && root.selected < root.options.length ? root.options[root.selected] : "";
+            color: Theme.text;
+            font-size: Theme.fs-md;
+            font-weight: 500;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+            overflow: elide;
+        }
+        VerticalLayout {
+            alignment: center;
+            Image {
+                source: @image-url("icons/down.svg");
+                width: 16px;
+                height: 16px;
+                colorize: Theme.text-3;
+            }
+        }
+    }
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            popup.show();
+        }
+    }
+    popup := PopupWindow {
+        x: 0;
+        y: root.height + 4px;
+        width: root.width;
+        height: min(root.options.length * 38px + 12px, 340px);
+        close-policy: close-on-click-outside;
+        Rectangle {
+            border-radius: Theme.radius-md;
+            background: Theme.surface-2;
+            drop-shadow-blur: 24px;
+            drop-shadow-offset-y: 8px;
+            drop-shadow-color: #00000080;
+            clip: true;
+            ListView {
+                y: 6px;
+                height: parent.height - 12px;
+                for option[i] in root.options: Rectangle {
+                    height: 38px;
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        spacing: 10px;
+                        Rectangle {
+                            border-radius: Theme.radius-sm;
+                            background: row.has-hover ? Theme.surface-3 : transparent;
+                            HorizontalLayout {
+                                padding-left: 8px;
+                                spacing: 8px;
+                                VerticalLayout {
+                                    alignment: center;
+                                    width: 16px;
+                                    if i == root.selected: Image {
+                                        source: @image-url("icons/check.svg");
+                                        width: 16px;
+                                        height: 16px;
+                                        colorize: Theme.accent;
+                                    }
+                                }
+                                Text {
+                                    text: option;
+                                    color: i == root.selected ? Theme.accent : Theme.text;
+                                    font-size: Theme.fs-md;
+                                    vertical-alignment: center;
+                                    overflow: elide;
+                                }
+                            }
+                            row := TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => {
+                                    root.chosen(i);
+                                    popup.close();
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

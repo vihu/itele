@@ -1,0 +1,22 @@
+// What the Settings screen shows and what it asks for, shared by its
+// panels.
+
+import { GuideStatus, ProviderDetails, SettingKey, SettingValues } from "models.slint";
+
+// What the Settings screen shows and what it asks for; the Rust side
+// fills and answers it.
+export global SettingsData {
+    in property <[ProviderDetails]> providers;
+    in property <[GuideStatus]> guide-rows;
+    in property <SettingValues> values;
+    in property <string> version;
+    // The language choices, in the order of the values' indexes.
+    in property <[string]> audio-languages;
+    in property <[string]> subtitle-languages;
+    callback rename(int, string);
+    callback refresh-provider(int);
+    callback refresh-guide(int);
+    callback refresh-all();
+    callback shift-guide(int, int);
+    callback set-setting(SettingKey, int);
+}

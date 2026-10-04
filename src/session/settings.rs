@@ -1,8 +1,7 @@
-//! The Settings screen: each provider's details and name, the guide's
-//! refresh settings, and saving changes.
+//! The Settings screen: each provider's details and name, and its guide
+//! (the preferences are in `preferences.rs`).
 
 use itele::provider::Provider;
-use itele::settings::{Refresh, Sidebar};
 use itele::xtream::Action;
 use slint::{ComponentHandle, ModelRc, VecModel};
 
@@ -10,20 +9,9 @@ use super::refresh::Force;
 use super::timefmt::{ago, now};
 use super::{Session, Slot, State, expiry};
 use crate::names::thousands;
-use crate::ui::{
-    Fact, GuideStatus, ProviderDetails, Screen, SettingKey, SettingValues, SettingsData, Shell,
-};
+use crate::ui::{Fact, GuideStatus, ProviderDetails, Screen, SettingsData};
 use crate::vod::Shelves;
 
-/// The interval choices, in the order the screen lists them.
-const INTERVALS: [Refresh; 4] = [
-    Refresh::Every6Hours,
-    Refresh::Every12Hours,
-    Refresh::Daily,
-    Refresh::Manual,
-];
-/// The days-to-keep choices, in order.
-const KEEP_DAYS: [u32; 3] = [3, 7, 14];
 /// The largest guide time shift, in hours either way.
 const MAX_SHIFT: i32 = 12;
 
@@ -47,66 +35,10 @@ impl Session {
                 .map(|slot| (self.details_of(&state, slot), self.guide_of(slot)))
                 .unzip()
         };
-        let settings = self.settings.borrow();
         let data = app.global::<SettingsData>();
         data.set_providers(ModelRc::new(VecModel::from(providers)));
         data.set_guide_rows(ModelRc::new(VecModel::from(guide)));
-        data.set_values(SettingValues {
-            guide_refresh: index_of(&INTERVALS, &settings.guide_refresh),
-            list_refresh: index_of(&INTERVALS, &settings.list_refresh),
-            keep_days: index_of(&KEEP_DAYS, &settings.keep_days),
-        });
-    }
-
-    /// One control changed `key` to its option `value`.
-    pub(super) fn set_setting(&self, key: SettingKey, value: i32) {
-        let pick = |options: &[_]| {
-            usize::try_from(value)
-                .ok()
-                .and_then(|i| options.get(i).copied())
-        };
-        {
-            let mut settings = self.settings.borrow_mut();
-            match key {
-                SettingKey::GuideRefresh => match pick(&INTERVALS) {
-                    Some(refresh) => settings.guide_refresh = refresh,
-                    None => return,
-                },
-                SettingKey::ListRefresh => match pick(&INTERVALS) {
-                    Some(refresh) => settings.list_refresh = refresh,
-                    None => return,
-                },
-                SettingKey::KeepDays => {
-                    match usize::try_from(value).ok().and_then(|i| KEEP_DAYS.get(i)) {
-                        Some(&days) => settings.keep_days = days,
-                        None => return,
-                    }
-                }
-            }
-            if let Err(e) = self.paths.save_settings(&settings) {
-                eprintln!("save settings: {e}");
-            }
-        }
-        self.push_settings();
-    }
-
-    /// Expands or collapses the sidebar, and remembers it.
-    pub(super) fn toggle_sidebar(&self) {
-        let Some(app) = self.app.upgrade() else {
-            return;
-        };
-        let expanded = {
-            let mut settings = self.settings.borrow_mut();
-            settings.sidebar = match settings.sidebar {
-                Sidebar::Expanded => Sidebar::Collapsed,
-                Sidebar::Collapsed => Sidebar::Expanded,
-            };
-            if let Err(e) = self.paths.save_settings(&settings) {
-                eprintln!("save settings: {e}");
-            }
-            settings.sidebar == Sidebar::Expanded
-        };
-        app.global::<Shell>().set_sidebar_expanded(expanded);
+        data.set_values(self.setting_values());
     }
 
     /// Renames the provider at `index`; an empty name brings back the
@@ -327,12 +259,4 @@ impl Session {
             ])),
         }
     }
-}
-
-/// The position of `value` among `options`, for a segmented control.
-fn index_of<T: PartialEq>(options: &[T], value: &T) -> i32 {
-    options
-        .iter()
-        .position(|o| o == value)
-        .map_or(0, |i| i as i32)
 }

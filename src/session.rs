@@ -13,6 +13,7 @@ mod grid;
 mod guide;
 mod page;
 mod player;
+mod preferences;
 mod providers;
 mod refresh;
 mod search;
@@ -30,7 +31,7 @@ use std::time::{Duration, Instant};
 use itele::epg::{Programme, Store};
 use itele::history::{Entry, History};
 use itele::provider::{Library, Paths, Provider};
-use itele::settings::{Settings, Sidebar};
+use itele::settings::Settings;
 use itele::xtream::{Credentials, LiveStream, Movie, Show};
 use mpv_engine::{EndReason, Engine, PlaybackEvent};
 use slint::{ComponentHandle, SharedString, Timer, TimerMode, VecModel};
@@ -257,9 +258,9 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
     app.on_details_restart(|| with_session(|s| s.details_play(Start::Beginning)));
     app.on_details_back(|| with_session(|s| s.details_back()));
     app.on_details_season_selected(|i| with_session(|s| s.details_season_selected(i)));
-    let shell = app.global::<Shell>();
-    shell.set_sidebar_expanded(session.settings.borrow().sidebar == Sidebar::Expanded);
-    shell.on_toggle_sidebar(|| with_session(|s| s.toggle_sidebar()));
+    app.global::<Shell>()
+        .on_toggle_sidebar(|| with_session(|s| s.toggle_sidebar()));
+    session.apply_preferences();
     let settings = app.global::<SettingsData>();
     settings.set_version(env!("CARGO_PKG_VERSION").into());
     settings.on_rename(|i, name| with_session(|s| s.rename_provider(i, &name)));
@@ -334,6 +335,7 @@ impl Session {
     fn load(&self, url: &str, start: Option<f64>) -> mpv_engine::Result<()> {
         let start = start.map_or_else(|| "none".to_owned(), |s| format!("{s:.1}"));
         self.engine.set_property("start", start.as_str())?;
+        self.reset_tracks();
         self.engine.load(url)
     }
 

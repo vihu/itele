@@ -38,8 +38,25 @@ pub struct Settings {
     pub sidebar: Sidebar,
     /// The screen itele opens with.
     pub start_on: StartOn,
+    /// The screen showing when itele last closed, for
+    /// [`StartOn::LastScreen`].
+    pub last_screen: Place,
     /// 24-hour or 12-hour times.
     pub clock: Clock,
+}
+
+/// A screen itele can open with.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Place {
+    /// Live TV.
+    LiveTv,
+    /// The guide.
+    Guide,
+    /// Movies.
+    Movies,
+    /// Series.
+    Series,
 }
 
 /// How often something is downloaded again.
@@ -115,6 +132,7 @@ impl Default for Settings {
             next_episode: true,
             sidebar: Sidebar::Expanded,
             start_on: StartOn::LiveTv,
+            last_screen: Place::LiveTv,
             clock: Clock::Hours24,
         }
     }

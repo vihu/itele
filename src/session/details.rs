@@ -150,10 +150,11 @@ impl Session {
     }
 
     /// Shows `page`, asking for its pictures.
-    pub(super) fn show_page(&self, page: Page) {
+    pub(super) fn show_page(&self, mut page: Page) {
         let Some(app) = self.app.upgrade() else {
             return;
         };
+        page.resume_on = self.settings.borrow().resume;
         let kind = page.kind();
         self.state.borrow_mut().page = Some(page);
         self.request_page_art();
@@ -184,11 +185,13 @@ impl Session {
         let Some(history) = &self.history else {
             return;
         };
+        let resume_on = self.settings.borrow().resume;
         let series = {
             let mut state = self.state.borrow_mut();
             let Some(page) = state.page.as_mut() else {
                 return;
             };
+            page.resume_on = resume_on;
             let provider = page.provider.clone();
             match &mut page.subject {
                 Subject::Movie {

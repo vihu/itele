@@ -205,7 +205,21 @@ export struct ProviderDetails {
 }
 
 // Which setting changed, for the window's set-setting callback.
-export enum SettingKey { guide-refresh, list-refresh, keep-days }
+export enum SettingKey {
+    guide-refresh,
+    list-refresh,
+    keep-days,
+    hardware-decoding,
+    audio-language,
+    subtitle-language,
+    stream-format,
+    rewind-buffer,
+    resume,
+    next-episode,
+    sidebar,
+    start-on,
+    clock,
+}
 
 // The current settings, as the controls show them: each choice is the
 // index of its option.
@@ -215,6 +229,22 @@ export struct SettingValues {
     list-refresh: int,
     // 3, 7 or 14 days.
     keep-days: int,
+    hardware-decoding: bool,
+    // Indexes into the settings data's language lists.
+    audio-language: int,
+    subtitle-language: int,
+    // Automatic, MPEG-TS, HLS.
+    stream-format: int,
+    // 256 MB, 512 MB, 1 GB, 2 GB.
+    rewind-buffer: int,
+    resume: bool,
+    next-episode: bool,
+    // Expanded, icons only.
+    sidebar: int,
+    // Live TV, where I left off.
+    start-on: int,
+    // 24-hour, 12-hour.
+    clock: int,
 }
 
 // One provider's guide in Settings.

@@ -24,6 +24,7 @@ impl Session {
                 }
                 self.refresh_lists();
                 self.show(Screen::Live);
+                self.open_start_screen();
             }
             Ok(_) => self.show_login(""),
             Err(e) => self.show_login(&e.to_string()),

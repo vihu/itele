@@ -142,6 +142,7 @@ impl Session {
         };
         let (seasons, season, episodes, stills, index) = {
             let mut state = self.state.borrow_mut();
+            let resume_on = state.page.as_ref().is_some_and(|p| p.resume_on);
             let Some(Subject::Show {
                 info,
                 season,
@@ -192,7 +193,7 @@ impl Session {
             *episodes = Rc::new(VecModel::from(
                 listed
                     .into_iter()
-                    .map(|e| episode_item(e, watched.get(&e.id.0)))
+                    .map(|e| episode_item(e, watched.get(&e.id.0), resume_on))
                     .collect::<Vec<_>>(),
             ));
             (seasons, *season, Rc::clone(episodes), stills.clone(), index)
@@ -252,7 +253,10 @@ impl Page {
                 series: Some(show.id.0),
                 title: name.clone(),
             },
-            resume: watched.get(&episode.id.0).and_then(Progress::resume_at),
+            resume: watched
+                .get(&episode.id.0)
+                .and_then(Progress::resume_at)
+                .filter(|_| self.resume_on),
             name,
             programme: ProgrammeInfo {
                 title: episode.title.as_str().into(),
@@ -276,8 +280,8 @@ fn season_episodes(info: &ShowInfo, season: usize) -> Vec<&Episode> {
         .collect()
 }
 
-fn episode_item(episode: &Episode, progress: Option<&Progress>) -> EpisodeItem {
-    let resume = progress.filter(|p| p.resume_at().is_some());
+fn episode_item(episode: &Episode, progress: Option<&Progress>, resume_on: bool) -> EpisodeItem {
+    let resume = progress.filter(|p| resume_on && p.resume_at().is_some());
     EpisodeItem {
         number: episode.number.to_string().into(),
         title: episode.title.as_str().into(),

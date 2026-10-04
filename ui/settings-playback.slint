@@ -1,0 +1,146 @@
+// The Playback and Interface sections of Settings.
+
+import { Theme } from "theme.slint";
+import { SettingKey } from "models.slint";
+import { PanelHeader, Segmented, Select, SettingRow, Toggle } from "settings-controls.slint";
+import { SettingsData } from "settings-data.slint";
+
+// A small heading over a group of settings.
+component GroupTitle inherits Text {
+    color: Theme.text-3;
+    font-size: Theme.fs-sm;
+    font-weight: 700;
+    height: 52px;
+    vertical-alignment: bottom;
+}
+
+export component PlaybackPanel inherits VerticalLayout {
+    PanelHeader {
+        title: "Playback";
+        description: "How mpv plays channels, movies and episodes. Changes apply at once.";
+    }
+    GroupTitle {
+        text: "Picture and sound";
+        height: 30px;
+    }
+    SettingRow {
+        title: "Hardware decoding";
+        description: "Decodes on the GPU when it can. Turn off if a channel shows artefacts.";
+        Toggle {
+            on: SettingsData.values.hardware-decoding;
+            toggled => {
+                SettingsData.set-setting(SettingKey.hardware-decoding, self.on ? 0 : 1);
+            }
+        }
+    }
+    SettingRow {
+        title: "Audio language";
+        description: "Chosen when a stream has several tracks.";
+        Select {
+            options: SettingsData.audio-languages;
+            selected: SettingsData.values.audio-language;
+            chosen(i) => {
+                SettingsData.set-setting(SettingKey.audio-language, i);
+            }
+        }
+    }
+    SettingRow {
+        title: "Subtitles";
+        description: "Shown when a stream has them in this language.";
+        Select {
+            options: SettingsData.subtitle-languages;
+            selected: SettingsData.values.subtitle-language;
+            chosen(i) => {
+                SettingsData.set-setting(SettingKey.subtitle-language, i);
+            }
+        }
+    }
+    GroupTitle {
+        text: "Live TV";
+    }
+    SettingRow {
+        title: "Stream format";
+        description: "Transport stream starts faster; some providers only allow HLS.";
+        Segmented {
+            options: ["Automatic", "MPEG-TS", "HLS"];
+            selected: SettingsData.values.stream-format;
+            chosen(i) => {
+                SettingsData.set-setting(SettingKey.stream-format, i);
+            }
+        }
+    }
+    SettingRow {
+        title: "Rewind buffer";
+        description: "How much of a live channel stays in memory to pause and rewind.";
+        Segmented {
+            options: ["256 MB", "512 MB", "1 GB", "2 GB"];
+            selected: SettingsData.values.rewind-buffer;
+            chosen(i) => {
+                SettingsData.set-setting(SettingKey.rewind-buffer, i);
+            }
+        }
+    }
+    GroupTitle {
+        text: "Movies and series";
+    }
+    SettingRow {
+        title: "Resume where I stopped";
+        description: "Otherwise every title starts from the beginning.";
+        Toggle {
+            on: SettingsData.values.resume;
+            toggled => {
+                SettingsData.set-setting(SettingKey.resume, self.on ? 0 : 1);
+            }
+        }
+    }
+    SettingRow {
+        title: "Play the next episode";
+        description: "When an episode ends, the next one starts.";
+        Toggle {
+            on: SettingsData.values.next-episode;
+            toggled => {
+                SettingsData.set-setting(SettingKey.next-episode, self.on ? 0 : 1);
+            }
+        }
+    }
+}
+
+export component InterfacePanel inherits VerticalLayout {
+    PanelHeader {
+        title: "Interface";
+        description: "How itele looks and where it starts.";
+    }
+    SettingRow {
+        title: "Sidebar";
+        description: "Collapse or expand it any time with the button at its foot, or Ctrl+B.";
+        Segmented {
+            options: ["Expanded", "Icons only"];
+            selected: SettingsData.values.sidebar;
+            chosen(i) => {
+                SettingsData.set-setting(SettingKey.sidebar, i);
+            }
+        }
+    }
+    SettingRow {
+        title: "Start on";
+        description: "The screen itele opens with.";
+        Segmented {
+            options: ["Live TV", "Where I left off"];
+            selected: SettingsData.values.start-on;
+            chosen(i) => {
+                SettingsData.set-setting(SettingKey.start-on, i);
+            }
+        }
+    }
+    SettingRow {
+        title: "Clock";
+        description: "In the guide, the player and programme times.";
+        Segmented {
+            options: ["24-hour", "12-hour"];
+            selected: SettingsData.values.clock;
+            chosen(i) => {
+                SettingsData.set-setting(SettingKey.clock, i);
+            }
+        }
+    }
+}

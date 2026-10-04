@@ -26,6 +26,9 @@ pub(super) struct Page {
     pub(super) note: String,
     /// The screen the page was opened from, which Back returns to.
     pub(super) origin: Screen,
+    /// The user resumes titles (a setting); otherwise every title plays
+    /// from the start and no page offers Resume.
+    pub(super) resume_on: bool,
 }
 
 /// What the page is about, with the provider's details once known.
@@ -83,6 +86,7 @@ impl Page {
             backdrop: None,
             note,
             origin,
+            resume_on: true,
         }
     }
 
@@ -158,9 +162,9 @@ impl Page {
     pub(super) fn details(&self) -> TitleDetails {
         let details = self.shared();
         let resume = match &self.subject {
-            Subject::Movie { progress, .. } => {
-                progress.as_ref().filter(|p| p.resume_at().is_some())
-            }
+            Subject::Movie { progress, .. } => progress
+                .as_ref()
+                .filter(|p| self.resume_on && p.resume_at().is_some()),
             Subject::Show { .. } => None,
         };
         let (name, year, rating, extent, back_label) = match &self.subject {
@@ -263,7 +267,9 @@ pub(super) fn movie_feature(
             series: None,
             title: movie.name.clone(),
         },
-        resume: progress.and_then(|p| p.resume_at()),
+        resume: progress
+            .and_then(|p| p.resume_at())
+            .filter(|_| page.resume_on),
     }
 }
 

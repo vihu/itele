@@ -1,10 +1,21 @@
 //! Times as the screens show them: local clock times, day labels, and
 //! spans like "Starts in 38 min".
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use itele::epg::Programme;
 
 /// Ruler and guide window steps, in seconds.
 pub(super) const HALF_HOUR: i64 = 1800;
+
+/// Clock times in 12-hour form (`9:30 PM`), as the user set; read by every
+/// formatter here, so it is one flag rather than an argument everywhere.
+static TWELVE_HOUR: AtomicBool = AtomicBool::new(false);
+
+/// Writes clock times in 12-hour form from now on, or in 24-hour form.
+pub(super) fn set_twelve_hour(twelve: bool) {
+    TWELVE_HOUR.store(twelve, Ordering::Relaxed);
+}
 
 pub(super) fn now() -> i64 {
     jiff::Timestamp::now().as_second()
@@ -72,13 +83,18 @@ pub(super) fn when(programme: &Programme, now: i64) -> String {
     }
 }
 
-/// Unix seconds as local `21:00`.
+/// Unix seconds as local `21:00`, or `9:00 PM` in 12-hour form.
 pub(super) fn clock(at: i64) -> String {
+    let format = if TWELVE_HOUR.load(Ordering::Relaxed) {
+        "%-I:%M %p"
+    } else {
+        "%H:%M"
+    };
     jiff::Timestamp::from_second(at).map_or_else(
         |_| String::new(),
         |t| {
             t.to_zoned(jiff::tz::TimeZone::system())
-                .strftime("%H:%M")
+                .strftime(format)
                 .to_string()
         },
     )

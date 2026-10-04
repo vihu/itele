@@ -1,0 +1,133 @@
+// The Guide section of Settings: refresh intervals, days kept, and each
+// provider's guide with its time shift.
+
+import { Theme } from "theme.slint";
+import { Button, ButtonKind } from "atoms.slint";
+import { GuideStatus, SettingKey } from "models.slint";
+import { PanelHeader, Segmented, SettingRow, Stepper } from "settings-controls.slint";
+import { SettingsData } from "settings-data.slint";
+
+// One provider's guide: how it is, its time shift, and Refresh.
+component GuideRowView inherits VerticalLayout {
+    in property <GuideStatus> status;
+    callback shift(int);
+    callback refresh();
+    HorizontalLayout {
+        padding-top: 14px;
+        padding-bottom: 14px;
+        spacing: 20px;
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+            horizontal-stretch: 1;
+            Text {
+                text: root.status.name;
+                color: Theme.text;
+                font-size: Theme.fs-md;
+                font-weight: 600;
+                overflow: elide;
+            }
+            Text {
+                text: root.status.status;
+                color: root.status.busy ? Theme.accent : Theme.text-3;
+                font-size: Theme.fs-sm;
+                overflow: elide;
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            Stepper {
+                value: root.status.shift;
+                step(sign) => {
+                    root.shift(sign);
+                }
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            Button {
+                kind: ButtonKind.secondary;
+                text: "Refresh";
+                enabled: !root.status.busy;
+                clicked => {
+                    root.refresh();
+                }
+            }
+        }
+    }
+    Rectangle {
+        height: 1px;
+        background: Theme.line;
+    }
+}
+
+export component GuidePanel inherits VerticalLayout {
+    property <[string]> intervals: ["Every 6 h", "Every 12 h", "Daily", "Only by hand"];
+    PanelHeader {
+        title: "Guide";
+        description: "itele downloads each provider's guide in the background, at start and while it stays open.";
+        action: "Refresh all now";
+        icon: @image-url("icons/refresh.svg");
+        clicked => {
+            SettingsData.refresh-all();
+        }
+    }
+    SettingRow {
+        title: "Refresh the guide";
+        description: "How old a guide may get before it is downloaded again. Large guides can take a minute.";
+        Segmented {
+            options: root.intervals;
+            selected: SettingsData.values.guide-refresh;
+            chosen(i) => {
+                SettingsData.set-setting(SettingKey.guide-refresh, i);
+            }
+        }
+    }
+    SettingRow {
+        title: "Refresh channel and title lists";
+        description: "Channels, movies and series, from each provider. The account is checked every time.";
+        Segmented {
+            options: root.intervals;
+            selected: SettingsData.values.list-refresh;
+            chosen(i) => {
+                SettingsData.set-setting(SettingKey.list-refresh, i);
+            }
+        }
+    }
+    SettingRow {
+        title: "Keep past programmes";
+        description: "For catch-up. Providers rarely keep more than a week. Applies at the next refresh.";
+        Segmented {
+            options: ["3 days", "7 days", "14 days"];
+            selected: SettingsData.values.keep-days;
+            chosen(i) => {
+                SettingsData.set-setting(SettingKey.keep-days, i);
+            }
+        }
+    }
+    Text {
+        text: "Per provider";
+        color: Theme.text-3;
+        font-size: Theme.fs-sm;
+        font-weight: 700;
+        height: 56px;
+        vertical-alignment: bottom;
+    }
+    for row[i] in SettingsData.guide-rows: GuideRowView {
+        status: row;
+        shift(sign) => {
+            SettingsData.shift-guide(i, sign);
+        }
+        refresh => {
+            SettingsData.refresh-guide(i);
+        }
+    }
+    Text {
+        text: "Shift the times when a provider's guide is an hour or two off; the guide downloads again.";
+        color: Theme.text-3;
+        font-size: Theme.fs-sm;
+        wrap: word-wrap;
+        height: 40px;
+        vertical-alignment: bottom;
+    }
+}

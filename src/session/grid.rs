@@ -42,6 +42,16 @@ pub(super) struct Grid {
 impl Session {
     /// Switches between the browse screens from the rail.
     pub(super) fn navigate(&self, item: i32) {
+        let place = match item {
+            1 => Some(Screen::Live),
+            2 => Some(Screen::Guide),
+            3 => Some(Screen::Movies),
+            4 => Some(Screen::Series),
+            _ => None,
+        };
+        if let Some(screen) = place {
+            self.remember_screen(screen);
+        }
         match item {
             1 => {
                 self.show(Screen::Live);
