@@ -9,9 +9,7 @@
 #
 #   macos.sh merge <arm64.app.tar> <x86_64.app.tar>
 #     Joins the two into one app for Apple silicon and Intel, ad-hoc
-#     signed, as target/dist/itele-<version>-macos-universal.zip. Both
-#     builds must carry the same libraries, which they do when Homebrew is
-#     current on both.
+#     signed, as target/dist/itele-<version>-macos-universal.zip.
 #
 # Ad-hoc signing seals the bundle: a download then gets macOS's "could not
 # verify" prompt, which Privacy & Security > Open Anyway clears, instead
@@ -64,15 +62,23 @@ merge() {
   app=$work/itele.app
   cp -R "$arm" "$app"
 
-  if ! diff <(cd "$arm" && find . -type f | sort) <(cd "$intel" && find . -type f | sort); then
-    echo "the arm64 and x86_64 builds carry different files" >&2
-    exit 1
-  fi
+  # A file both builds carry is joined into one for both architectures. A
+  # library only one carries (Homebrew's version on the two machines can
+  # differ, say libx265.216 and .217) goes in as it is: each architecture's
+  # half of the app loads the libraries its own build named.
   while IFS= read -r file; do
-    if file "$arm/$file" | grep -q 'Mach-O'; then
+    if [ -e "$intel/$file" ] && file "$arm/$file" | grep -q 'Mach-O'; then
       lipo -create -output "$app/$file" "$arm/$file" "$intel/$file"
+    elif [ ! -e "$intel/$file" ]; then
+      echo "arm64 only: $file"
     fi
   done < <(cd "$arm" && find . -type f)
+  while IFS= read -r file; do
+    if [ ! -e "$arm/$file" ]; then
+      echo "x86_64 only: $file"
+      cp "$intel/$file" "$app/$file"
+    fi
+  done < <(cd "$intel" && find . -type f)
 
   # The newest macOS any part was built for.
   minos=$(find "$app/Contents" -type f -exec sh -c 'file "$1" | grep -q Mach-O && otool -l "$1"' _ {} \; |
