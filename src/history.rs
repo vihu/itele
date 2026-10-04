@@ -5,7 +5,7 @@
 //! cache keeps it. Titles are keyed by provider, kind and the provider's
 //! id; episodes also record their series, for "Resume S2 E4".
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use camino::Utf8Path;
 use rusqlite::{Connection, OptionalExtension, Row, params};
@@ -203,6 +203,53 @@ impl History {
         Ok((episodes, last))
     }
 
+    /// Titles started and not finished, latest first, at most `limit`; a
+    /// series once, by the episode watched last.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the store cannot be read.
+    pub fn unfinished(&self, limit: usize) -> rusqlite::Result<Vec<(Entry, Progress)>> {
+        let mut statement = self.conn.prepare_cached(
+            "SELECT provider, kind, id, series, title, position, duration, watched, updated
+             FROM progress ORDER BY updated DESC",
+        )?;
+        let rows = statement.query_map([], |row| {
+            let entry = Entry {
+                provider: row.get(0)?,
+                kind: match row.get::<_, i64>(1)? {
+                    1 => Kind::Episode,
+                    _ => Kind::Movie,
+                },
+                id: row.get(2)?,
+                series: row
+                    .get::<_, Option<i64>>(3)?
+                    .and_then(|s| u64::try_from(s).ok()),
+                title: row.get(4)?,
+            };
+            Ok((entry, progress_at(row, 5)?))
+        })?;
+        let mut seen = HashSet::new();
+        let mut unfinished = Vec::new();
+        for row in rows {
+            let (entry, progress) = row?;
+            // A series counts once, by its latest episode, finished or not.
+            let title = (entry.provider.clone(), entry.series, entry.id.clone());
+            let key = match entry.series {
+                Some(_) => (title.0, title.1, String::new()),
+                None => title,
+            };
+            if !seen.insert(key) || progress.resume_at().is_none() {
+                continue;
+            }
+            unfinished.push((entry, progress));
+            if unfinished.len() == limit {
+                break;
+            }
+        }
+        Ok(unfinished)
+    }
+
     /// Forgets everything watched from `provider`.
     ///
     /// # Errors
@@ -337,5 +384,30 @@ mod tests {
 
         history.remove("north").unwrap();
         assert!(history.all("north", Kind::Episode).unwrap().is_empty());
+    }
+
+    #[test]
+    fn unfinished_lists_latest_first_and_a_series_once() {
+        let history = History::in_memory().unwrap();
+        history
+            .save(&entry(Kind::Movie, "501", None), 600.0, 5400.0, 10)
+            .unwrap();
+        history
+            .save(&entry(Kind::Movie, "502", None), 5300.0, 5400.0, 20)
+            .unwrap();
+        history
+            .save(&entry(Kind::Episode, "e1", Some(7)), 900.0, 1500.0, 30)
+            .unwrap();
+        history
+            .save(&entry(Kind::Episode, "e2", Some(7)), 300.0, 1500.0, 40)
+            .unwrap();
+        let ids: Vec<_> = history
+            .unfinished(10)
+            .unwrap()
+            .into_iter()
+            .map(|(e, _)| e.id)
+            .collect();
+        assert_eq!(ids, ["e2", "501"], "watched 502 and older e1 left out");
+        assert_eq!(history.unfinished(1).unwrap().len(), 1);
     }
 }

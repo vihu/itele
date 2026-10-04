@@ -9,7 +9,7 @@ import { LoginScreen } from "login.slint";
 import { ChannelItem, GroupItem, LiveTvScreen, ProgrammeInfo, UpcomingItem } from "live-tv.slint";
 import { InfoLine, InfoPair, PlayerScreen, PlayerState, TrackItem } from "player.slint";
 import { GuideCell, GuideDetails, GuideRow, GuideScreen, GuideTick } from "guide.slint";
-import { ProviderItem } from "models.slint";
+import { HomeCard, ProviderItem } from "models.slint";
 import { SearchData, SearchItem, SearchScreen } from "search.slint";
 import { Shell } from "sidebar.slint";
 import { Browse } from "browse.slint";
@@ -17,10 +17,11 @@ import { Fact, GuideStatus, ProviderDetails, SettingKey, SettingValues, Settings
 import { PosterItem, VodScreen } from "vod.slint";
 import { DetailsScreen, EpisodeItem, SeasonItem, TitleDetails } from "details.slint";
 import { FavoritesScreen } from "favorites.slint";
+import { HomeScreen } from "home.slint";
 
-export { Shell, SearchData, ChannelItem, Fact, GroupItem, GuideStatus, SettingKey, SettingValues, SettingsData, ProviderItem, SearchItem, GuideCell, GuideDetails, GuideRow, GuideTick, EpisodeItem, InfoLine, InfoPair, PlayerState, PosterItem, ProgrammeInfo, ProviderDetails, SeasonItem, TitleDetails, TrackItem, UpcomingItem }
+export { Shell, SearchData, ChannelItem, HomeCard, Fact, GroupItem, GuideStatus, SettingKey, SettingValues, SettingsData, ProviderItem, SearchItem, GuideCell, GuideDetails, GuideRow, GuideTick, EpisodeItem, InfoLine, InfoPair, PlayerState, PosterItem, ProgrammeInfo, ProviderDetails, SeasonItem, TitleDetails, TrackItem, UpcomingItem }
 
-export enum Screen { login, live, favorites, guide, search, movies, series, details, settings, player }
+export enum Screen { login, home, live, favorites, guide, search, movies, series, details, settings, player }
 
 
 export component AppWindow inherits Window {
@@ -38,8 +39,8 @@ export component AppWindow inherits Window {
     in property <[ProviderItem]> providers;
     // The provider the groups show; -1 shows every provider.
     in property <int> view-index: -1;
-    callback login();
-    callback cancel-login();
+    callback login <=> login-screen.submit;
+    callback cancel-login <=> login-screen.cancel;
     callback add-provider();
     callback sign-out(int);
     callback view-selected(int);
@@ -60,18 +61,25 @@ export component AppWindow inherits Window {
     // group; the Favorites screen reorders them and filters by provider.
     in property <int> favorites-filter: -1;
     callback toggle-favorite(int);
-    callback move-favorite(int);
-    callback filter-favorites(int);
+    callback move-favorite <=> favorites-screen.reorder;
+    callback filter-favorites <=> favorites-screen.filter-selected;
     // Favorite channels, movies and series; the Favorites screen's tab (0
     // channels, 1 movies, 2 series) and its movies or series.
     in property <[int]> favorite-counts: [0, 0, 0];
     in property <int> favorites-tab;
     in property <[PosterItem]> favorite-titles;
     in-out property <int> favorite-title-index;
-    callback favorites-tab-selected(int);
-    callback open-favorite-title(int);
-    callback remove-favorite-title(int);
+    callback favorites-tab-selected <=> favorites-screen.tab-selected;
+    callback open-favorite-title <=> favorites-screen.open-title;
+    callback remove-favorite-title <=> favorites-screen.remove-title;
     callback details-favorite <=> details-screen.favorite;
+
+    // Home's rows: titles left unfinished, favorite channels with what is
+    // on, the newest movies; a card opens with its row (1 to 3) and index.
+    in property <[HomeCard]> home-unfinished;
+    in property <[ChannelItem]> home-channels;
+    in property <[PosterItem]> home-movies;
+    callback home-open <=> home.open;
 
     // Guide.
     in property <[GuideRow]> guide-rows;
@@ -82,13 +90,13 @@ export component AppWindow inherits Window {
     in property <GuideDetails> guide-details;
     out property <length> guide-track-width: guide.track-width;
     callback navigate(int);
-    callback guide-move(int, int);
-    callback guide-page(int);
-    callback guide-now();
+    callback guide-move <=> guide.move;
+    callback guide-page <=> guide.page;
+    callback guide-now <=> guide.now;
     callback guide-enter();
-    callback guide-replay();
+    callback guide-replay <=> guide.replay;
     callback guide-shift(int);
-    callback guide-rows-visible(int, int);
+    callback guide-rows-visible <=> guide.rows-visible;
     callback guide-cell-clicked(int, int);
 
     // Scrolls the guide grid to its selected row.
@@ -125,9 +133,9 @@ export component AppWindow inherits Window {
     in property <string> vod-status;
     in property <string> vod-note;
     in-out property <bool> vod-focus-groups;
-    callback vod-group-selected(int);
-    callback vod-open(int);
-    callback vod-items-visible(int, int);
+    callback vod-group-selected <=> vod.group-selected;
+    callback vod-open <=> vod.open;
+    callback vod-items-visible <=> vod.items-visible;
 
     // Scrolls the poster grid to the selected title.
     public function reveal-vod() {
@@ -164,8 +172,8 @@ export component AppWindow inherits Window {
     in property <[InfoLine]> info;
     // The label of the player's back button, for example "Live TV".
     in property <string> player-back: "Live TV";
-    out property <length> video-width: screen == Screen.player ? root.width : screen == Screen.guide ? guide.video-width : screen == Screen.favorites ? favorites-screen.video-width : live.video-width;
-    out property <length> video-height: screen == Screen.player ? root.height : screen == Screen.guide ? guide.video-height : screen == Screen.favorites ? favorites-screen.video-height : live.video-height;
+    out property <length> video-width: screen == Screen.player ? root.width : screen == Screen.guide ? guide.video-width : screen == Screen.favorites ? favorites-screen.video-width : screen == Screen.home ? home.video-width : live.video-width;
+    out property <length> video-height: screen == Screen.player ? root.height : screen == Screen.guide ? guide.video-height : screen == Screen.favorites ? favorites-screen.video-height : screen == Screen.home ? home.video-height : live.video-height;
     callback watch();
     callback back <=> player-screen.back;
     callback zap <=> player-screen.zap;
@@ -191,6 +199,8 @@ export component AppWindow inherits Window {
     public function focus-screen() {
         if (root.screen == Screen.login) {
             login-screen.focus-first();
+        } else if (root.screen == Screen.home) {
+            home.focus-keys();
         } else if (root.screen == Screen.live) {
             live.focus-keys();
         } else if (root.screen == Screen.favorites) {
@@ -230,7 +240,7 @@ export component AppWindow inherits Window {
 
     // The screens beside the sidebar and under the top bar.
     property <bool> browsing: root.screen != Screen.login && root.screen != Screen.player;
-    property <int> place: root.screen == Screen.live ? 1 : root.screen == Screen.favorites ? 7 : root.screen == Screen.guide ? 2 : root.screen == Screen.movies ? 3 : root.screen == Screen.series ? 4 : root.screen == Screen.details ? root.details-rail : root.screen == Screen.settings ? 6 : -1;
+    property <int> place: root.screen == Screen.home ? 0 : root.screen == Screen.live ? 1 : root.screen == Screen.favorites ? 7 : root.screen == Screen.guide ? 2 : root.screen == Screen.movies ? 3 : root.screen == Screen.series ? 4 : root.screen == Screen.details ? root.details-rail : root.screen == Screen.settings ? 6 : -1;
 
     property <ChannelItem> current: root.channel-index >= 0 && root.channel-index < root.channels.length ? root.channels[root.channel-index] : { name: "" };
 
@@ -279,6 +289,26 @@ export component AppWindow inherits Window {
                 }
             }
 
+            home := HomeScreen {
+                visible: root.screen == Screen.home;
+                current: root.current;
+                programme: root.programme;
+                frame: root.screen == Screen.home ? root.frame : @image-url("");
+                video-note: root.video-note;
+                unfinished: root.home-unfinished;
+                channels: root.home-channels;
+                movies: root.home-movies;
+                watch => {
+                    root.watch();
+                }
+                favorite => {
+                    root.toggle-favorite(root.channel-index);
+                }
+                navigate(i) => {
+                    root.navigate(i);
+                }
+            }
+
             live := LiveTvScreen {
                 visible: root.screen == Screen.live;
                 groups: root.groups;
@@ -324,15 +354,6 @@ export component AppWindow inherits Window {
                 tab: root.favorites-tab;
                 titles: root.favorite-titles;
                 title-index <=> root.favorite-title-index;
-                tab-selected(i) => {
-                    root.favorites-tab-selected(i);
-                }
-                open-title(i) => {
-                    root.open-favorite-title(i);
-                }
-                remove-title(i) => {
-                    root.remove-favorite-title(i);
-                }
                 frame: root.screen == Screen.favorites ? root.frame : @image-url("");
                 video-note: root.video-note;
                 programme: root.programme;
@@ -345,12 +366,6 @@ export component AppWindow inherits Window {
                 }
                 favorite(row) => {
                     root.toggle-favorite(row);
-                }
-                reorder(delta) => {
-                    root.move-favorite(delta);
-                }
-                filter-selected(i) => {
-                    root.filter-favorites(i);
                 }
                 navigate(i) => {
                     root.navigate(i);
@@ -370,30 +385,15 @@ export component AppWindow inherits Window {
                 details: root.guide-details;
                 frame: root.screen == Screen.guide ? root.frame : @image-url("");
                 video-note: root.video-note;
-                rows-visible(first, count) => {
-                    root.guide-rows-visible(first, count);
-                }
                 cell-clicked(row, cell) => {
                     root.guide-cell-clicked(row, cell);
                     guide.focus-keys();
-                }
-                move(dx, dy) => {
-                    root.guide-move(dx, dy);
-                }
-                page(direction) => {
-                    root.guide-page(direction);
-                }
-                now => {
-                    root.guide-now();
                 }
                 enter => {
                     root.guide-enter();
                 }
                 watch => {
                     root.guide-enter();
-                }
-                replay => {
-                    root.guide-replay();
                 }
                 earlier => {
                     root.guide-shift(-1);
@@ -427,15 +427,6 @@ export component AppWindow inherits Window {
                 index <=> root.vod-index;
                 note: root.vod-note;
                 focus-groups <=> root.vod-focus-groups;
-                group-selected(i) => {
-                    root.vod-group-selected(i);
-                }
-                open(i) => {
-                    root.vod-open(i);
-                }
-                items-visible(first, count) => {
-                    root.vod-items-visible(first, count);
-                }
                 navigate(i) => {
                     root.navigate(i);
                 }
@@ -496,12 +487,6 @@ export component AppWindow inherits Window {
             error: root.login-error;
             busy: root.login-busy;
             can-cancel: root.login-can-cancel;
-            submit => {
-                root.login();
-            }
-            cancel => {
-                root.cancel-login();
-            }
         }
     }
 }

@@ -140,6 +140,18 @@ export struct PosterItem {
     hue: color,
 }
 
+// A title left unfinished, on Home: a movie, or a series by its latest
+// episode.
+export struct HomeCard {
+    title: string,
+    // For example "S2 E4 · 18 min left".
+    detail: string,
+    tint: color,
+    image: image,
+    has-image: bool,
+    progress: float,
+}
+
 // The detail page of a movie or a series.
 export struct TitleDetails {
     title: string,

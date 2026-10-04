@@ -149,7 +149,7 @@ impl Session {
             return app.set_video_note("Connecting to the provider…".into());
         };
         let url = credentials.live_url(stream.id, self.live_format(&source.library.account));
-        match self.load(&url, None) {
+        let tuned = match self.load(&url, None) {
             Ok(()) => {
                 app.set_video_note("Tuning…".into());
                 app.set_provider_name(source.name.as_str().into());
@@ -157,8 +157,16 @@ impl Session {
                     provider: source.id.clone(),
                     content: Content::Live(stream.clone()),
                 });
+                Some((source.id.clone(), stream.id))
             }
-            Err(_) => app.set_video_note("Could not start playback".into()),
+            Err(_) => {
+                app.set_video_note("Could not start playback".into());
+                None
+            }
+        };
+        drop(state);
+        if let Some((provider, stream)) = tuned {
+            self.remember_channel(&provider, stream);
         }
     }
 }

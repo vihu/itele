@@ -292,7 +292,7 @@ export component FavoritesScreen inherits Rectangle {
                 }
             }
             preview := ChannelPreview {
-                visible: root.tab == 0 && root.count > 0;
+                visible: root.tab == 0 && root.count > 0 && root.channels.length > 0;
                 width: root.tab == 0 ? 460px : 0px;
                 frame: root.frame;
                 video-note: root.video-note;

@@ -249,6 +249,7 @@ impl Page {
             back_label: match self.origin {
                 Screen::Search => "Search",
                 Screen::Favorites => "Favorites",
+                Screen::Home => "Home",
                 _ => back_label,
             }
             .into(),

@@ -18,7 +18,7 @@ use crate::ui::{PosterItem, Screen, Shell};
 
 /// Container assumed for a movie whose list has not loaded; its details
 /// name the real one before it plays.
-const FALLBACK_EXTENSION: &str = "mp4";
+pub(super) const FALLBACK_EXTENSION: &str = "mp4";
 
 /// The titles on the Favorites screen's tab, which take posters as they
 /// arrive.

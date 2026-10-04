@@ -166,6 +166,7 @@ impl Session {
         self.push_page();
         app.set_details_rail(match (origin, kind) {
             (Screen::Favorites, _) => 7,
+            (Screen::Home, _) => 0,
             (_, Kind::Movies) => 3,
             (_, Kind::Series) => 4,
         });

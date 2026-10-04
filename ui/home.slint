@@ -1,0 +1,368 @@
+// Home: the channel watched last, still playing, beside what is on; then
+// the titles left unfinished, the favorite channels with what is on, and
+// the newest movies. Layout: .ai-docs/mockups/01-home.html.
+
+import { Theme } from "theme.slint";
+import { Button, ButtonKind, ChannelLogo, LiveMarker, ProviderTag } from "atoms.slint";
+import { ChannelItem, HomeCard, PosterItem, ProgrammeInfo } from "models.slint";
+import { PosterCard } from "vod.slint";
+import { ChannelCard, SectionHead, UnfinishedCard } from "home-cards.slint";
+
+export component HomeScreen inherits Rectangle {
+    in property <ChannelItem> current;
+    in property <ProgrammeInfo> programme;
+    in property <image> frame;
+    in property <string> video-note;
+    in property <[HomeCard]> unfinished;
+    in property <[ChannelItem]> channels;
+    in property <[PosterItem]> movies;
+    out property <length> video-width: video.width;
+    out property <length> video-height: video.height;
+    callback watch();
+    // F: the channel joins the favorites, or leaves.
+    callback favorite();
+    // A card: row 1 unfinished, 2 favorite channels, 3 newest movies.
+    callback open(int, int);
+    callback navigate(int);
+
+    // The keyboard's place: row 0 is the channel at the top.
+    property <int> line;
+    property <int> unfinished-col;
+    property <int> channel-col;
+    property <int> movie-col;
+    property <[int]> lengths: [1, root.unfinished.length, root.channels.length, root.movies.length];
+
+    public function focus-keys() {
+        keys.focus();
+    }
+
+    // Whether row `r` is there and has cards; row 0 always is.
+    function has-row(r: int) -> bool {
+        r >= 0 && r <= 3 && root.lengths[r] > 0
+    }
+
+    // Moves to the next row with cards in direction `step`.
+    function move-row(step: int) {
+        let a = root.line + step;
+        let b = a + step;
+        let c = b + step;
+        let target = root.has-row(a) ? a : root.has-row(b) ? b : root.has-row(c) ? c : -1;
+        if (target >= 0) {
+            root.line = target;
+            root.reveal-row();
+        }
+    }
+
+    // Moves along the row, scrolling the card into view.
+    function move-col(step: int) {
+        if (root.line == 1) {
+            root.unfinished-col = max(0, min(root.unfinished.length - 1, root.unfinished-col + step));
+            let x = root.unfinished-col * 316px;
+            if (x < -unfinished-row.content-x) {
+                unfinished-row.content-x = -x;
+            } else if (x + 300px > -unfinished-row.content-x + unfinished-row.width) {
+                unfinished-row.content-x = -(x + 300px - unfinished-row.width);
+            }
+        } else if (root.line == 2) {
+            root.channel-col = max(0, min(root.channels.length - 1, root.channel-col + step));
+            let x = root.channel-col * 316px;
+            if (x < -channel-row.content-x) {
+                channel-row.content-x = -x;
+            } else if (x + 300px > -channel-row.content-x + channel-row.width) {
+                channel-row.content-x = -(x + 300px - channel-row.width);
+            }
+        } else if (root.line == 3) {
+            root.movie-col = max(0, min(root.movies.length - 1, root.movie-col + step));
+            let x = root.movie-col * 186px;
+            if (x < -movie-row.content-x) {
+                movie-row.content-x = -x;
+            } else if (x + 164px > -movie-row.content-x + movie-row.width) {
+                movie-row.content-x = -(x + 164px - movie-row.width);
+            }
+        }
+    }
+
+    function reveal-row() {
+        let top = root.line == 0 ? 0px : root.line == 1 ? unfinished-section.y : root.line == 2 ? channel-section.y : movie-section.y;
+        let bottom = root.line == 0 ? hero.height : root.line == 1 ? unfinished-section.y + unfinished-section.height : root.line == 2 ? channel-section.y + channel-section.height : movie-section.y + movie-section.height;
+        if (top < -page.content-y) {
+            page.content-y = -top;
+        } else if (bottom > -page.content-y + page.height) {
+            page.content-y = -(bottom - page.height);
+        }
+    }
+
+    background: Theme.bg;
+    keys := FocusScope {
+        key-pressed(event) => {
+            let key = event.text.to-lowercase();
+            if (event.text == Key.UpArrow) {
+                root.move-row(-1);
+            } else if (event.text == Key.DownArrow) {
+                root.move-row(1);
+            } else if (event.text == Key.LeftArrow) {
+                root.move-col(-1);
+            } else if (event.text == Key.RightArrow) {
+                root.move-col(1);
+            } else if (event.text == Key.Return) {
+                if (root.line == 0) {
+                    if (root.current.name != "") {
+                        root.watch();
+                    } else {
+                        root.navigate(1);
+                    }
+                } else {
+                    root.open(root.line, root.line == 1 ? root.unfinished-col : root.line == 2 ? root.channel-col : root.movie-col);
+                }
+            } else if (key == "f" && root.line == 0 && root.current.name != "") {
+                root.favorite();
+            } else if (key == "g") {
+                root.navigate(2);
+            } else if (event.text == "/" || (event.modifiers.control && key == "k")) {
+                root.navigate(5);
+            } else {
+                return reject;
+            }
+            accept
+        }
+    }
+    page := Flickable {
+        content-height: body.preferred-height;
+        body := VerticalLayout {
+            width: page.width;
+            padding-bottom: 40px;
+            hero := Rectangle {
+                height: 440px;
+                clip: true;
+                video := Rectangle {
+                    width: parent.width * 0.76;
+                    height: self.width * 9 / 16;
+                    x: parent.width - self.width;
+                    y: -(self.height - parent.height) * 0.3;
+                    Image {
+                        width: 100%;
+                        height: 100%;
+                        source: root.frame;
+                        image-fit: fill;
+                    }
+                }
+                Rectangle {
+                    x: video.x;
+                    width: video.width;
+                    background: @linear-gradient(90deg, Theme.bg 0%, #0b0c10db 18%, #0b0c1000 52%);
+                }
+                Rectangle {
+                    background: @linear-gradient(0deg, Theme.bg 0%, #0b0c1000 30%);
+                }
+                if root.video-note != "" && root.current.name != "": Text {
+                    x: parent.width - self.width - 48px;
+                    y: parent.height - self.height - 48px;
+                    text: root.video-note;
+                    color: Theme.text-2;
+                    font-size: Theme.fs-sm;
+                    font-weight: 500;
+                }
+                // The copy, packed against the foot of the picture.
+                VerticalLayout {
+                    x: 48px;
+                    y: 0;
+                    width: min(560px, parent.width - 96px);
+                    height: parent.height - 40px;
+                    alignment: end;
+                    spacing: 0px;
+                    Text {
+                        text: root.current.name == "" ? "Nothing playing yet" : root.programme.title != "" ? root.programme.title : root.current.name;
+                        color: Theme.text;
+                        font-size: Theme.fs-4xl;
+                        font-weight: 800;
+                        overflow: elide;
+                    }
+                    Rectangle {
+                        height: 14px;
+                    }
+                    if root.current.name != "": HorizontalLayout {
+                        spacing: 12px;
+                        alignment: start;
+                        VerticalLayout {
+                            alignment: center;
+                            ChannelLogo {
+                                short: root.current.short;
+                                tint: root.current.tint;
+                                logo: root.current.logo;
+                                has-logo: root.current.has-logo;
+                            }
+                        }
+                        if root.programme.title != "": VerticalLayout {
+                            alignment: center;
+                            LiveMarker { }
+                        }
+                        Text {
+                            text: root.programme.title != "" ? root.current.name + "  ·  " + root.programme.time : root.current.name;
+                            color: Theme.text-2;
+                            font-size: Theme.fs-md;
+                            font-weight: 500;
+                            vertical-alignment: center;
+                        }
+                        if root.current.provider != "": VerticalLayout {
+                            alignment: center;
+                            ProviderTag {
+                                text: root.current.provider;
+                                hue: root.current.hue;
+                            }
+                        }
+                    }
+                    if root.programme.title != "": HorizontalLayout {
+                        padding-top: 16px;
+                        padding-bottom: 16px;
+                        spacing: 12px;
+                        alignment: start;
+                        VerticalLayout {
+                            alignment: center;
+                            Rectangle {
+                                width: 320px;
+                                height: 4px;
+                                border-radius: 2px;
+                                background: #ffffff29;
+                                Rectangle {
+                                    x: 0;
+                                    width: parent.width * max(0, root.programme.progress);
+                                    border-radius: 2px;
+                                    background: Theme.accent;
+                                }
+                            }
+                        }
+                        Text {
+                            text: root.programme.left;
+                            color: Theme.text-3;
+                            font-size: Theme.fs-sm;
+                        }
+                    }
+                    Text {
+                        text: root.current.name == "" ? "Pick a channel in Live TV and it plays here when you come back. Press F on one to keep it in Favorites."
+                            : root.programme.description;
+                        color: Theme.text-2;
+                        font-size: Theme.fs-md;
+                        wrap: word-wrap;
+                        overflow: elide;
+                        max-height: 66px;
+                    }
+                    Rectangle {
+                        height: 22px;
+                    }
+                    HorizontalLayout {
+                        spacing: 12px;
+                        alignment: start;
+                        Button {
+                            kind: ButtonKind.primary;
+                            text: root.current.name == "" ? "Open Live TV" : "Watch";
+                            hint: "Enter";
+                            icon: @image-url("icons/play.svg");
+                            has-icon: root.current.name != "";
+                            clicked => {
+                                if (root.current.name != "") {
+                                    root.watch();
+                                } else {
+                                    root.navigate(1);
+                                }
+                            }
+                        }
+                        if root.current.name != "": Button {
+                            text: "Favorite";
+                            hint: "F";
+                            icon: root.current.favorite ? @image-url("icons/heart-fill.svg") : @image-url("icons/heart.svg");
+                            has-icon: true;
+                            on: root.current.favorite;
+                            clicked => {
+                                root.favorite();
+                            }
+                        }
+                    }
+                }
+                if root.line == 0 && keys.has-focus: Rectangle {
+                    x: 36px;
+                    y: parent.height - 6px;
+                    width: 40px;
+                    height: 3px;
+                    border-radius: 1.5px;
+                    background: Theme.accent;
+                }
+            }
+            unfinished-section := VerticalLayout {
+                visible: root.unfinished.length > 0;
+                height: root.unfinished.length > 0 ? 56px + 169px + 62px + 20px : 0px;
+                padding-left: 48px;
+                SectionHead {
+                    text: "Continue watching";
+                }
+                unfinished-row := Flickable {
+                    height: 169px + 62px;
+                    content-width: root.unfinished.length * 316px;
+                    HorizontalLayout {
+                        spacing: 16px;
+                        alignment: start;
+                        for card[i] in root.unfinished: UnfinishedCard {
+                            card: card;
+                            selected: root.line == 1 && i == root.unfinished-col && keys.has-focus;
+                            clicked => {
+                                root.line = 1;
+                                root.unfinished-col = i;
+                                root.open(1, i);
+                            }
+                        }
+                    }
+                }
+            }
+            channel-section := VerticalLayout {
+                visible: root.channels.length > 0;
+                height: root.channels.length > 0 ? 56px + 150px + 20px : 0px;
+                padding-left: 48px;
+                SectionHead {
+                    text: "Favorite channels";
+                }
+                channel-row := Flickable {
+                    height: 150px;
+                    content-width: root.channels.length * 316px;
+                    HorizontalLayout {
+                        spacing: 16px;
+                        alignment: start;
+                        for item[i] in root.channels: ChannelCard {
+                            item: item;
+                            selected: root.line == 2 && i == root.channel-col && keys.has-focus;
+                            clicked => {
+                                root.line = 2;
+                                root.channel-col = i;
+                                root.open(2, i);
+                            }
+                        }
+                    }
+                }
+            }
+            movie-section := VerticalLayout {
+                visible: root.movies.length > 0;
+                height: root.movies.length > 0 ? 56px + 246px + 76px : 0px;
+                padding-left: 48px;
+                SectionHead {
+                    text: "New movies";
+                }
+                movie-row := Flickable {
+                    height: 246px + 76px;
+                    content-width: root.movies.length * 186px;
+                    HorizontalLayout {
+                        spacing: 22px;
+                        alignment: start;
+                        for item[i] in root.movies: PosterCard {
+                            width: 164px;
+                            item: item;
+                            selected: root.line == 3 && i == root.movie-col && keys.has-focus;
+                            clicked => {
+                                root.line = 3;
+                                root.movie-col = i;
+                                root.open(3, i);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

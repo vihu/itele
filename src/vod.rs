@@ -134,6 +134,13 @@ impl<T: Tile> Catalog<T> {
             .collect()
     }
 
+    /// Every loaded title, with its provider.
+    pub fn titles(&self) -> impl Iterator<Item = (&Source<T>, &T)> {
+        self.sources
+            .iter()
+            .flat_map(|source| source.shelf.titles.iter().map(move |t| (source, t)))
+    }
+
     /// `provider`'s title with id `key`, as [`Tile::key`] gives it.
     pub fn find(&self, provider: &str, key: &str) -> Option<&T> {
         let source = self.sources.iter().find(|s| s.id == provider)?;

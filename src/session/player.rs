@@ -38,13 +38,14 @@ impl Session {
     pub(super) fn enter_player(&self) {
         if let Some(app) = self.app.upgrade() {
             match app.get_screen() {
-                Screen::Favorites => self.live_origin.set(Screen::Favorites),
+                screen @ (Screen::Favorites | Screen::Home) => self.live_origin.set(screen),
                 Screen::Player => {}
                 _ => self.live_origin.set(Screen::Live),
             }
             let label = match (self.timeline(), self.live_origin.get()) {
                 (Timeline::Title, _) => "Back",
                 (_, Screen::Favorites) => "Favorites",
+                (_, Screen::Home) => "Home",
                 _ => "Live TV",
             };
             app.set_player_back(label.into());

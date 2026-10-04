@@ -150,6 +150,7 @@ impl Session {
             self.show_poster(&url, &image);
             self.show_search_poster(&url, &image);
             self.show_favorite_poster(&url, &image);
+            self.show_home_poster(&url, &image);
         }
         self.page_art_ready(&url, size, &image);
     }

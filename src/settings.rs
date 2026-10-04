@@ -43,12 +43,25 @@ pub struct Settings {
     pub last_screen: Place,
     /// 24-hour or 12-hour times.
     pub clock: Clock,
+    /// The channel watched last, which Home opens on.
+    pub last_channel: Option<ChannelRef>,
+}
+
+/// A provider's channel, by stream id.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChannelRef {
+    /// The provider's id.
+    pub provider: String,
+    /// The channel's stream id.
+    pub stream: u64,
 }
 
 /// A screen itele can open with.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Place {
+    /// Home.
+    Home,
     /// Live TV.
     LiveTv,
     /// The guide.
@@ -136,6 +149,7 @@ impl Default for Settings {
             start_on: StartOn::LiveTv,
             last_screen: Place::LiveTv,
             clock: Clock::Hours24,
+            last_channel: None,
         }
     }
 }

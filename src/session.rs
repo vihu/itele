@@ -14,6 +14,7 @@ mod favorite_titles;
 mod favorites;
 mod grid;
 mod guide;
+mod home;
 mod navigate;
 mod page;
 mod player;
@@ -24,6 +25,7 @@ mod search;
 mod series;
 mod settings;
 mod shelves;
+mod status;
 mod timefmt;
 mod vod;
 
@@ -35,19 +37,19 @@ use std::time::{Duration, Instant};
 use itele::epg::{Programme, Store};
 use itele::favorites::Favorites;
 use itele::history::{Entry, History};
-use itele::provider::{Library, Paths, Provider};
+use itele::provider::{Paths, Provider};
 use itele::settings::Settings;
 use itele::xtream::{Credentials, LiveStream, Movie, Show};
 use mpv_engine::{EndReason, Engine, PlaybackEvent};
 use slint::{ComponentHandle, SharedString, Timer, TimerMode, VecModel};
 
 use crate::art::Art;
-use crate::live::{Catalog, GuideKey, View};
+use crate::live::{Catalog, GuideKey};
 use crate::logos::Logos;
-use crate::names::thousands;
 use crate::playback::{self, SEEK_STEP, VOLUME_STEP};
 use crate::tracks;
 use crate::ui::{AppWindow, ChannelItem, Screen, SearchData, SettingsData, Shell};
+use status::{expiry, host_of, initials, library_status};
 
 /// Delay before the preview follows the selection, so holding Down does
 /// not open a stream per row.
@@ -115,6 +117,7 @@ struct State {
     /// The group Live TV showed before the Favorites screen took it.
     live_group: Option<usize>,
     favorite_titles: favorite_titles::FavoriteTitles,
+    home: home::Home,
     /// Days of catch-up each row keeps; 0 for none.
     row_archive: Vec<u32>,
     /// Rows the channel list last reported on screen.
@@ -270,6 +273,7 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
     app.on_open_favorite_title(|i| with_session(|s| s.open_favorite_title(i)));
     app.on_remove_favorite_title(|i| with_session(|s| s.remove_favorite_title(i)));
     app.on_details_favorite(|| with_session(|s| s.toggle_page_favorite()));
+    app.on_home_open(|row, i| with_session(|s| s.home_open(row, i)));
     app.on_guide_rows_visible(|first, count| with_session(|s| s.grid_rows_visible(first, count)));
     app.on_guide_move(|dx, dy| with_session(|s| s.grid_move(dx, dy)));
     app.on_guide_page(|direction| with_session(|s| s.grid_page(direction)));
@@ -395,47 +399,6 @@ impl Session {
         }
         self.show(Screen::Login);
     }
-
-    /// The status line under "Live TV": the viewed provider's, or a summary
-    /// of all of them.
-    fn view_status(&self) -> SharedString {
-        let state = self.state.borrow();
-        match state.catalog.view() {
-            View::One(id) => state
-                .slots
-                .iter()
-                .find(|slot| &slot.provider.id == id)
-                .map_or_else(SharedString::new, |slot| {
-                    format!("{} · {}", slot.status, slot.provider.name).into()
-                }),
-            View::All => match state.slots.len() {
-                0 => SharedString::new(),
-                1 => state.slots[0].status.as_str().into(),
-                n => format!(
-                    "{n} providers · {} channels",
-                    thousands(state.catalog.total_channels())
-                )
-                .into(),
-            },
-        }
-    }
-}
-
-/// For example `1,284 channels`.
-fn library_status(library: &Library) -> String {
-    format!("{} channels", thousands(library.streams.len()))
-}
-
-/// When the account expires, for example `12 Jan 2027`; `None` when it
-/// does not.
-fn expiry(account: &itele::xtream::Account) -> Option<String> {
-    let secs = i64::try_from(account.expires_at?).ok()?;
-    let at = jiff::Timestamp::from_second(secs).ok()?;
-    Some(
-        at.to_zoned(jiff::tz::TimeZone::system())
-            .strftime("%-d %b %Y")
-            .to_string(),
-    )
 }
 
 /// Builds mpv's wakeup callback, which turns playback events into the
@@ -468,39 +431,5 @@ fn drain_events(
                 }
             }
         });
-    }
-}
-
-/// `http://tv.example.com:8080` as `tv.example.com`.
-fn host_of(server: &str) -> &str {
-    let rest = server.split_once("://").map_or(server, |(_, rest)| rest);
-    rest.split([':', '/']).next().unwrap_or(rest)
-}
-
-/// Two letters for the avatar, from the username.
-fn initials(username: &str) -> String {
-    username
-        .chars()
-        .filter(|c| c.is_alphanumeric())
-        .take(2)
-        .flat_map(char::to_uppercase)
-        .collect()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn initials_take_two_letters() {
-        assert_eq!(initials("north.wind"), "NO");
-        assert_eq!(initials(""), "");
-    }
-
-    #[test]
-    fn host_of_strips_scheme_port_and_path() {
-        assert_eq!(host_of("http://tv.example.com:8080"), "tv.example.com");
-        assert_eq!(host_of("https://tv.example.com/iptv"), "tv.example.com");
-        assert_eq!(host_of("tv.example.com"), "tv.example.com");
     }
 }

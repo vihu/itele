@@ -92,12 +92,10 @@ impl Session {
         if self.state.borrow().browse.kind == Some(kind) {
             self.refresh_vod();
         }
-        if self
-            .app
-            .upgrade()
-            .is_some_and(|app| app.get_screen() == crate::ui::Screen::Search)
-        {
-            self.run_search();
+        match self.app.upgrade().map(|app| app.get_screen()) {
+            Some(crate::ui::Screen::Search) => self.run_search(),
+            Some(crate::ui::Screen::Home) => self.fill_home(),
+            _ => {}
         }
     }
 

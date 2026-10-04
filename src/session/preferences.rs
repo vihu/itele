@@ -1,8 +1,10 @@
 //! The user's preferences: the values the Settings controls show, saving a
 //! change, and applying it to mpv and the screens at once.
 
-use itele::settings::{Clock, Place, Refresh, Settings, Sidebar, StartOn, StreamFormat};
-use itele::xtream::{Account, OutputFormat};
+use itele::settings::{
+    ChannelRef, Clock, Place, Refresh, Settings, Sidebar, StartOn, StreamFormat,
+};
+use itele::xtream::{Account, OutputFormat, StreamId};
 use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
 
 use super::{Session, timefmt};
@@ -214,6 +216,7 @@ impl Session {
     /// Remembers `screen` for "Where I left off".
     pub(super) fn remember_screen(&self, screen: Screen) {
         let place = match screen {
+            Screen::Home => Place::Home,
             Screen::Live => Place::LiveTv,
             Screen::Guide => Place::Guide,
             Screen::Movies => Place::Movies,
@@ -230,6 +233,21 @@ impl Session {
         }
     }
 
+    /// Remembers the channel playing, which Home opens on next time.
+    pub(super) fn remember_channel(&self, provider: &str, stream: StreamId) {
+        let channel = Some(ChannelRef {
+            provider: provider.to_owned(),
+            stream: stream.0,
+        });
+        let mut s = self.settings.borrow_mut();
+        if s.last_channel != channel {
+            s.last_channel = channel;
+            if let Err(e) = self.paths.save_settings(&s) {
+                eprintln!("save settings: {e}");
+            }
+        }
+    }
+
     /// Opens the screen the user starts on, after the providers opened.
     pub(super) fn open_start_screen(&self) {
         let (start, last) = {
@@ -239,6 +257,7 @@ impl Session {
         if start == StartOn::LastScreen {
             match last {
                 Place::LiveTv => {}
+                Place::Home => self.navigate(0),
                 Place::Guide => self.navigate(2),
                 Place::Movies => self.navigate(3),
                 Place::Series => self.navigate(4),

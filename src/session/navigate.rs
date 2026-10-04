@@ -9,6 +9,7 @@ impl Session {
     /// Switches between the browse screens from the rail.
     pub(super) fn navigate(&self, item: i32) {
         let place = match item {
+            0 => Some(Screen::Home),
             1 => Some(Screen::Live),
             2 => Some(Screen::Guide),
             3 => Some(Screen::Movies),
@@ -19,10 +20,11 @@ impl Session {
         if let Some(screen) = place {
             self.remember_screen(screen);
         }
-        if matches!(item, 1 | 2) {
+        if matches!(item, 0..=2) {
             self.leave_favorites();
         }
         match item {
+            0 => self.open_home(),
             1 => {
                 self.show(Screen::Live);
                 self.resume_preview();

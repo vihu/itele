@@ -190,7 +190,7 @@ impl Session {
 }
 
 /// How far into `programme` `now` is, 0 to 1.
-fn progress(programme: &Programme, now: i64) -> f32 {
+pub(super) fn progress(programme: &Programme, now: i64) -> f32 {
     let length = (programme.stop - programme.start).max(1) as f32;
     ((now - programme.start) as f32 / length).clamp(0.0, 1.0)
 }
