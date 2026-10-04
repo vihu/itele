@@ -1,5 +1,25 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024"><defs>
-<linearGradient id="tile" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#22262f"/><stop offset="1" stop-color="#0b0c10"/></linearGradient>
-<radialGradient id="glow" cx="0.5" cy="0.38" r="0.62"><stop offset="0" stop-color="#f5a524" stop-opacity="0.16"/><stop offset="1" stop-color="#f5a524" stop-opacity="0"/></radialGradient>
-<linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.10"/><stop offset="0.5" stop-color="#fff" stop-opacity="0"/></linearGradient>
-</defs><rect x="100" y="100" width="824" height="824" rx="185" fill="url(#tile)"/><rect x="100" y="100" width="824" height="824" rx="185" fill="url(#glow)"/><circle cx="425" cy="331" r="68" fill="#f2f1ee"/><rect x="365" y="431" width="120" height="330" rx="60" fill="#f2f1ee"/><circle cx="597" cy="699" r="62" fill="#f5a524"/><rect x="100" y="100" width="824" height="824" rx="185" fill="url(#gloss)"/><rect x="101.5" y="101.5" width="821" height="821" rx="183.5" fill="none" stroke="#000" stroke-opacity="0.35" stroke-width="3"/></svg>
+<linearGradient id="tile" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#262a34"/><stop offset="1" stop-color="#0b0c10"/></linearGradient>
+<radialGradient id="glow" cx="0.5" cy="0.55" r="0.6"><stop offset="0" stop-color="#f5a524" stop-opacity="0.1"/><stop offset="1" stop-color="#f5a524" stop-opacity="0"/></radialGradient>
+<linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.10"/><stop offset="0.45" stop-color="#fff" stop-opacity="0"/></linearGradient>
+<clipPath id="tileclip"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
+<linearGradient id="cabinet" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fdfcf9"/><stop offset="1" stop-color="#d6d2c9"/></linearGradient>
+<linearGradient id="recess" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b9b4aa"/><stop offset="1" stop-color="#e4e0d8"/></linearGradient>
+<radialGradient id="tube" cx="0.5" cy="0.42" r="0.75"><stop offset="0" stop-color="#2b2f39"/><stop offset="1" stop-color="#0b0c10"/></radialGradient>
+<radialGradient id="tubeglow" cx="0.5" cy="0.55" r="0.5"><stop offset="0" stop-color="#f5a524" stop-opacity="0.26"/><stop offset="1" stop-color="#f5a524" stop-opacity="0"/></radialGradient>
+<linearGradient id="glass" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.16"/><stop offset="0.5" stop-color="#fff" stop-opacity="0"/></linearGradient>
+<linearGradient id="rod" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#d6d2c9"/></linearGradient>
+<radialGradient id="shadow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#000" stop-opacity="0.6"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>
+<clipPath id="tubeclip"><rect x="232" y="344" width="560" height="408" rx="74"/></clipPath></defs><rect x="100" y="100" width="824" height="824" rx="185" fill="url(#tile)"/><rect x="100" y="100" width="824" height="824" rx="185" fill="url(#glow)"/><g clip-path="url(#tileclip)"><ellipse cx="512" cy="852" rx="350" ry="44" fill="url(#shadow)"/>
+<path d="M512 296 L 382 170" stroke="url(#rod)" stroke-width="28" stroke-linecap="round"/>
+<path d="M512 296 L 650 176" stroke="url(#rod)" stroke-width="28" stroke-linecap="round"/>
+<circle cx="382" cy="170" r="30" fill="#fdfcf9"/><circle cx="650" cy="176" r="30" fill="#fdfcf9"/>
+<ellipse cx="512" cy="292" rx="62" ry="36" fill="#e9e6df"/>
+<rect x="262" y="776" width="92" height="72" rx="22" fill="#bfbab0"/><rect x="670" y="776" width="92" height="72" rx="22" fill="#bfbab0"/>
+<rect x="176" y="288" width="672" height="520" rx="112" fill="url(#cabinet)"/>
+<rect x="179" y="291" width="666" height="514" rx="109" fill="none" stroke="#fff" stroke-opacity="0.7" stroke-width="5"/>
+<rect x="216" y="328" width="592" height="440" rx="90" fill="url(#recess)"/>
+<rect x="232" y="344" width="560" height="408" rx="74" fill="url(#tube)"/>
+<rect x="232" y="344" width="560" height="408" rx="74" fill="url(#tubeglow)"/>
+<path transform="translate(410.46 685.61) scale(0.16190 -0.16190)" d="M133.3455810546875 0V1080H483.7000732421875V0ZM308.5228271484375 1187.9010009765625Q206.5062255859375 1187.9010009765625 147.427978515625 1246.979248046875Q88.3497314453125 1306.0574951171875 88.3497314453125 1408.0740966796875Q88.3497314453125 1510.3046875 147.427978515625 1569.2759399414062Q206.5062255859375 1628.2471923828125 308.5228271484375 1628.2471923828125Q410.75341796875 1628.2471923828125 469.72467041015625 1569.2759399414062Q528.6959228515625 1510.3046875 528.6959228515625 1408.0740966796875Q528.6959228515625 1306.0574951171875 469.72467041015625 1246.979248046875Q410.75341796875 1187.9010009765625 308.5228271484375 1187.9010009765625Z" fill="#f2f1ee"/><path transform="translate(510.35 685.61) scale(0.16190 -0.16190)" d="M321.58447265625 -27.14404296875Q218.283935546875 -27.14404296875 156.2056884765625 34.9342041015625Q94.12744140625 97.012451171875 94.12744140625 200.31298828125Q94.12744140625 303.613525390625 156.2056884765625 365.6917724609375Q218.283935546875 427.77001953125 321.58447265625 427.77001953125Q424.885009765625 427.77001953125 486.9632568359375 365.6917724609375Q549.04150390625 303.613525390625 549.04150390625 200.31298828125Q549.04150390625 97.012451171875 486.9632568359375 34.9342041015625Q424.885009765625 -27.14404296875 321.58447265625 -27.14404296875Z" fill="#f5a524"/>
+<g clip-path="url(#tubeclip)"><path d="M232 344 L 640 344 C 520 420, 380 520, 232 600 Z" fill="url(#glass)"/></g></g><rect x="100" y="100" width="824" height="824" rx="185" fill="url(#gloss)"/><rect x="101.5" y="101.5" width="821" height="821" rx="183.5" fill="none" stroke="#000" stroke-opacity="0.4" stroke-width="3"/></svg>
