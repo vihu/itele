@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=itele
+GenericName=IPTV Player
+Comment=Watch live TV, movies and series from your IPTV providers
+Exec=itele
+Icon=io.github.vihu.itele
+Terminal=false
+Categories=AudioVideo;Video;Player;TV;
+Keywords=iptv;tv;xtream;live;guide;epg;player;
+StartupWMClass=io.github.vihu.itele

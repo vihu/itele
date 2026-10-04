@@ -32,6 +32,8 @@ use slint::wgpu_30::{WGPUConfiguration, WGPUSettings};
 #[global_allocator]
 static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
+/// The application id: the desktop entry, the icon and the Flatpak.
+const APP_ID: &str = "io.github.vihu.itele";
 /// ffmpeg options that reconnect a live HTTP stream after a network drop.
 const RECONNECT: &str = "reconnect=1,reconnect_streamed=1,reconnect_delay_max=5";
 /// Stream data mpv may buffer ahead of the playhead.
@@ -46,6 +48,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     slint::BackendSelector::new()
         .require_wgpu_30(WGPUConfiguration::Automatic(settings))
         .select()?;
+    // Matches the desktop entry, so docks show itele's icon for the window.
+    slint::set_xdg_app_id(APP_ID)?;
 
     let app = ui::AppWindow::new()?;
     let mut mpv = Engine::video()

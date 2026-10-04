@@ -1,0 +1,152 @@
+# Flatpak manifest for the release bundles, built from this checkout.
+#
+# The Freedesktop runtime has no mpv, so libmpv is built here with what it
+# needs that the runtime lacks (libass, FFmpeg, libplacebo), trimmed to
+# what itele uses: libmpv's render API over EGL, VA-API, and PulseAudio,
+# PipeWire or ALSA. After Flathub's io.mpv.Mpv.
+#
+# Cargo fetches the dependencies during the build (--share=network). That
+# is fine for a bundle but not on Flathub, whose builds are offline: a
+# Flathub manifest pins a release tag and vendors the crates instead.
+app-id: io.github.vihu.itele
+runtime: org.freedesktop.Platform
+runtime-version: '26.08'
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: itele
+finish-args:
+  # Providers, their streams, guides and pictures.
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+  - --socket=pulseaudio
+  # Passwords live in the Secret Service (GNOME Keyring, KWallet).
+  - --talk-name=org.freedesktop.secrets
+cleanup:
+  - /include
+  - /lib/pkgconfig
+  - /share/man
+  - '*.la'
+  - '*.a'
+modules:
+  - name: libass
+    config-opts:
+      - --disable-static
+      - --enable-fontconfig
+    sources:
+      - type: git
+        url: https://github.com/libass/libass.git
+        tag: 0.17.5
+        commit: 4a05d8127f525943ebf45fdc6497c9e665947f0d
+
+  - name: ffmpeg
+    config-opts:
+      - --disable-debug
+      - --disable-doc
+      - --disable-programs
+      - --disable-static
+      - --enable-shared
+      - --enable-gpl
+      - --enable-version3
+      # https streams and pictures.
+      - --enable-gnutls
+      - --enable-libdav1d
+      - --enable-libdrm
+      - --enable-vaapi
+      # Nothing is encoded or written.
+      - --disable-encoders
+      - --disable-muxers
+    sources:
+      - type: git
+        url: https://github.com/FFmpeg/FFmpeg.git
+        tag: n9.0.2
+        commit: 946fcce07b6dcd0331c8cc609192aeff5e1924f8
+
+  - name: libplacebo
+    buildsystem: meson
+    config-opts:
+      - -Ddemos=false
+      - -Dtests=false
+      - -Dopengl=enabled
+      - -Dvulkan=disabled
+      - -Dshaderc=disabled
+      - -Dglslang=disabled
+    sources:
+      - type: git
+        url: https://github.com/haasn/libplacebo.git
+        tag: v7.360.1
+        commit: cee9b076f2c63104ccfd497fa79c39a867293ec4
+
+  # mpv's DRM support reads monitors' EDID through libdisplay-info, which
+  # takes the PNP vendor ids from hwdata at build time.
+  - name: hwdata
+    buildsystem: autotools
+    cleanup:
+      - '*'
+    sources:
+      - type: archive
+        url: https://github.com/vcrhonek/hwdata/archive/refs/tags/v0.394.tar.gz
+        sha256: b7c3fd7214a3b7c49d2661db127a712dc11cffd1799f793947aa1cb20aaf3298
+
+  - name: libdisplay-info
+    buildsystem: meson
+    sources:
+      - type: archive
+        url: https://gitlab.freedesktop.org/emersion/libdisplay-info/-/archive/0.2.0/libdisplay-info-0.2.0.tar.gz
+        sha256: f7331fcaf5527251b84c8fb84238d06cd2f458422ce950c80e86c72927aa8c2b
+
+  - name: mpv
+    buildsystem: meson
+    config-opts:
+      - -Dlibmpv=true
+      - -Dcplayer=false
+      - -Dbuild-date=false
+      - -Dmanpage-build=disabled
+      - -Dhtml-build=disabled
+      - -Dlua=disabled
+      - -Djavascript=disabled
+      - -Dgl=enabled
+      - -Degl=enabled
+      - -Ddrm=enabled
+      - -Dgbm=enabled
+      - -Dvaapi=enabled
+      - -Dwayland=enabled
+      - -Dx11=disabled
+      - -Dvulkan=disabled
+      - -Dpulse=enabled
+      - -Dpipewire=enabled
+      - -Dalsa=enabled
+      - -Dwerror=false
+    sources:
+      - type: git
+        url: https://github.com/mpv-player/mpv.git
+        tag: v0.41.0
+        commit: 41f6a645068483470267271e1d09966ca3b9f413
+
+  - name: itele
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/rust-stable/bin
+      build-args:
+        - --share=network
+      env:
+        CARGO_HOME: /run/build/itele/cargo
+    build-commands:
+      - cargo build --release --locked
+      - install -Dm755 target/release/itele -t /app/bin
+      - install -Dm644 packaging/io.github.vihu.itele.desktop -t /app/share/applications
+      - install -Dm644 packaging/io.github.vihu.itele.svg -t /app/share/icons/hicolor/scalable/apps
+      - install -Dm644 packaging/io.github.vihu.itele.metainfo.xml -t /app/share/metainfo
+    sources:
+      # Kept with .git, so About names the commit.
+      - type: dir
+        path: ..
+        skip:
+          - .ai-docs
+          - .flatpak-builder
+          - build
+          - repo
+          - target

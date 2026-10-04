@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.vihu.itele</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>itele</name>
+  <summary>Watch live TV, movies and series from your IPTV providers</summary>
+  <developer id="io.github.vihu">
+    <name>vihu</name>
+  </developer>
+  <description>
+    <p>
+      itele is a native IPTV player with Xtream Codes support. Sign in to
+      one provider or several, browse their channels, movies and series side
+      by side, read the guide, search it all, and watch, in one window that
+      starts fast and stays light.
+    </p>
+    <ul>
+      <li>Home opens on the channel you watched last, with what you left unfinished</li>
+      <li>Live TV with groups, logos and what is on now and next</li>
+      <li>Favorites across providers, in your order</li>
+      <li>A TV guide grid, search across everything, and catch-up</li>
+      <li>Movies and series with plot, cast, seasons and resume</li>
+      <li>Audio and subtitle menus, and hardware decoding through libmpv</li>
+    </ul>
+    <p>
+      Passwords stay in the system keychain. itele brings no channels of its
+      own: it plays what your provider offers.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.vihu.itele.desktop</launchable>
+  <url type="homepage">https://github.com/vihu/itele</url>
+  <url type="bugtracker">https://github.com/vihu/itele/issues</url>
+  <url type="vcs-browser">https://github.com/vihu/itele</url>
+  <branding>
+    <color type="primary" scheme_preference="light">#ffd38a</color>
+    <color type="primary" scheme_preference="dark">#5c3d08</color>
+  </branding>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-10-04"/>
+  </releases>
+</component>
