@@ -28,6 +28,7 @@ impl Session {
         let ffmpeg = version("ffmpeg-version");
         let ffmpeg = ffmpeg.trim_start_matches('n');
         let data = app.global::<SettingsData>();
+        data.set_build(build(env!("CARGO_PKG_VERSION"), env!("ITELE_COMMIT")).into());
         data.set_player(format!("libmpv {mpv} with FFmpeg {ffmpeg}").into());
         let api = if cfg!(target_os = "macos") {
             "Metal"
@@ -169,6 +170,23 @@ fn bytes(n: u64) -> String {
     }
 }
 
+/// The About line for `version` built from `commit` (`7542fa1
+/// 2026-10-04`, or empty): `itele 0.1.0 · 7542fa1 of 4 Oct 2026`.
+fn build(version: &str, commit: &str) -> String {
+    let date = |day: &str| {
+        day.parse::<jiff::civil::Date>()
+            .map(|d| d.strftime("%-d %b %Y").to_string())
+            .ok()
+    };
+    match commit.split_once(' ') {
+        Some((hash, day)) => match date(day) {
+            Some(day) => format!("itele {version} \u{b7} {hash} of {day}"),
+            None => format!("itele {version} \u{b7} {hash}"),
+        },
+        None => format!("itele {version}"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -179,5 +197,14 @@ mod tests {
         assert_eq!(bytes(3000), "3 KB");
         assert_eq!(bytes(212 * 1024 * 1024), "212 MB");
         assert_eq!(bytes(1_400_000_000), "1.3 GB");
+    }
+
+    #[test]
+    fn the_build_line_names_the_commit_when_known() {
+        assert_eq!(
+            build("0.1.0", "7542fa1 2026-10-04"),
+            "itele 0.1.0 \u{b7} 7542fa1 of 4 Oct 2026"
+        );
+        assert_eq!(build("0.1.0", ""), "itele 0.1.0");
     }
 }

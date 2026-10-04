@@ -144,6 +144,9 @@ struct Slot {
     shows: shelves::ShelfState,
     /// A refresh is running; another is not started meanwhile.
     refreshing: bool,
+    /// What the refresh is doing, for example "Updating the guide…"; empty
+    /// when idle.
+    step: &'static str,
     /// Results of work started for an earlier slot with the same provider
     /// (signed out since) carry another epoch and are dropped.
     epoch: u64,

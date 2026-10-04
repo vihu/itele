@@ -10,6 +10,9 @@ export global SettingsData {
     in property <[GuideStatus]> guide-rows;
     in property <SettingValues> values;
     in property <string> version;
+    // The version with the commit it was built from, for example "itele
+    // 0.1.0 · 7542fa1 of 4 Oct 2026".
+    in property <string> build;
     // The language choices, in the order of the values' indexes.
     in property <[string]> audio-languages;
     in property <[string]> subtitle-languages;

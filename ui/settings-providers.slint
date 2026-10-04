@@ -154,7 +154,7 @@ export component ProviderBlock inherits VerticalLayout {
     HorizontalLayout {
         Button {
             kind: ButtonKind.secondary;
-            text: root.provider.busy ? "Refreshing…" : "Refresh now";
+            text: !root.provider.busy ? "Refresh now" : root.provider.step != "" ? root.provider.step : "Refreshing…";
             enabled: !root.provider.busy;
             icon: @image-url("icons/refresh.svg");
             has-icon: true;

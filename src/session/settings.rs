@@ -144,7 +144,11 @@ impl Session {
             .map(|programmes| format!(" · {programmes}"))
             .unwrap_or_default();
         let status = if slot.refreshing {
-            "Updating…".to_owned()
+            match slot.step {
+                "" => "Updating\u{2026}",
+                step => step,
+            }
+            .to_owned()
         } else if slot.guide.starts_with("guide failed") {
             slot.guide.replacen("guide failed", "Could not update", 1)
         } else {
@@ -236,6 +240,7 @@ impl Session {
             warn: !active || !failed.is_empty(),
             notice: failed.join("\n").into(),
             busy: slot.refreshing,
+            step: slot.step.into(),
             facts_top: ModelRc::new(VecModel::from(vec![
                 fact("Server", address.to_owned()),
                 fact("Username", provider.username.clone()),

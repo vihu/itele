@@ -279,6 +279,7 @@ impl Session {
                 movies: Default::default(),
                 shows: Default::default(),
                 refreshing: false,
+                step: "",
                 epoch,
             });
         }

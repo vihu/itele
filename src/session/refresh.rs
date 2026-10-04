@@ -14,6 +14,7 @@ use super::guide::{self, Plan};
 use super::shelves::Loaded;
 use super::vod::Kind;
 use super::{Session, on_ui_thread};
+use crate::ui::Screen;
 
 /// How often refreshes that fell due are looked for while itele runs.
 pub(super) const CHECK_EVERY: Duration = Duration::from_secs(15 * 60);
@@ -107,8 +108,29 @@ impl Session {
             .find(|s| s.provider.id == id && s.epoch == epoch)
         {
             slot.refreshing = false;
+            slot.step = "";
         }
         self.refresh_lists();
+    }
+
+    /// `id`'s refresh moved on to `step`; Settings shows it.
+    fn refresh_step(&self, id: &str, epoch: u64, step: &'static str) {
+        if let Some(slot) = self
+            .state
+            .borrow_mut()
+            .slots
+            .iter_mut()
+            .find(|s| s.provider.id == id && s.epoch == epoch)
+        {
+            slot.step = step;
+        }
+        if self
+            .app
+            .upgrade()
+            .is_some_and(|app| app.get_screen() == Screen::Settings)
+        {
+            self.push_settings();
+        }
     }
 }
 
@@ -152,9 +174,18 @@ fn run(job: Job, cache: &Cache, guide_path: Utf8PathBuf) {
         },
     };
     let client = Client::new(credentials);
+    let report = |step: &'static str| {
+        let id = id.clone();
+        on_ui_thread(move |s| s.refresh_step(&id, epoch, step));
+    };
 
     let cached = Library::from_cache(cache);
     let lists_due = job.lists.is_due(cache.age(Action::LiveStreams));
+    report(if lists_due {
+        "Updating channels\u{2026}"
+    } else {
+        "Checking the account\u{2026}"
+    });
     let result = match cached {
         Some(cached) if !lists_due => cached.with_fresh_account(&client, cache),
         _ => Library::fetch(&client, cache),
@@ -175,12 +206,17 @@ fn run(job: Job, cache: &Cache, guide_path: Utf8PathBuf) {
     });
 
     if let Some(wanted) = wanted {
+        report("Updating the guide\u{2026}");
         let imported = guide::refresh(&client, &guide_path, &id, &wanted, job.guide);
         let guide_id = id.clone();
         on_ui_thread(move |s| s.guide_ready(&guide_id, epoch, imported));
     }
 
     for kind in job.shelves {
+        report(match kind {
+            Kind::Movies => "Updating movies\u{2026}",
+            Kind::Series => "Updating series\u{2026}",
+        });
         let fetched = match kind {
             Kind::Movies => fetch_due::<Movie>(job.lists, &client, cache),
             Kind::Series => fetch_due::<Show>(job.lists, &client, cache),
