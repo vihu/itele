@@ -198,6 +198,12 @@ impl Paths {
         self.cache.join("logos")
     }
 
+    /// Where downloaded posters and backdrops are kept, shared by all
+    /// providers.
+    pub fn art_dir(&self) -> Utf8PathBuf {
+        self.cache.join("art")
+    }
+
     /// The cache for `provider`.
     pub fn cache(&self, provider: &Provider) -> Cache {
         Cache {

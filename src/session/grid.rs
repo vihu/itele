@@ -45,11 +45,17 @@ impl Session {
         match item {
             1 => {
                 self.show(Screen::Live);
+                self.resume_preview();
                 if let Some(app) = self.app.upgrade() {
                     app.invoke_reveal_current();
                 }
             }
-            2 => self.open_guide(),
+            2 => {
+                self.open_guide();
+                self.resume_preview();
+            }
+            3 => self.open_vod(super::vod::Kind::Movies),
+            4 => self.open_vod(super::vod::Kind::Series),
             5 => self.open_search(),
             _ => {}
         }

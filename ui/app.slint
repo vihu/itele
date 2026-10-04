@@ -1,4 +1,5 @@
-// The itele window: login, Live TV, and the fullscreen player.
+// The itele window: login, Live TV, the guide, search, Movies and Series,
+// and the fullscreen player.
 
 import "fonts/SchibstedGrotesk.ttf";
 import { Theme } from "theme.slint";
@@ -10,10 +11,11 @@ import { GuideCell, GuideDetails, GuideRow, GuideScreen, GuideTick } from "guide
 import { ProviderItem } from "models.slint";
 import { SearchItem, SearchScreen } from "search.slint";
 import { ProvidersPanel, SwitcherPanel } from "popups.slint";
+import { PosterItem, VodScreen } from "vod.slint";
 
-export { ChannelItem, GroupItem, ProviderItem, SearchItem, GuideCell, GuideDetails, GuideRow, GuideTick, InfoLine, InfoPair, PlayerState, ProgrammeInfo, UpcomingItem }
+export { ChannelItem, GroupItem, ProviderItem, SearchItem, GuideCell, GuideDetails, GuideRow, GuideTick, InfoLine, InfoPair, PlayerState, PosterItem, ProgrammeInfo, UpcomingItem }
 
-export enum Screen { login, live, guide, search, player }
+export enum Screen { login, live, guide, search, movies, series, player }
 
 
 export component AppWindow inherits Window {
@@ -87,6 +89,24 @@ export component AppWindow inherits Window {
         search.reveal(root.search-index);
     }
 
+    // Movies and Series, which share one screen.
+    in property <[GroupItem]> vod-groups;
+    in property <int> vod-group-index;
+    in property <string> vod-group-title;
+    in property <[PosterItem]> vod-items;
+    in-out property <int> vod-index;
+    in property <string> vod-status;
+    in property <string> vod-note;
+    in-out property <bool> vod-focus-groups;
+    callback vod-group-selected(int);
+    callback vod-open(int);
+    callback vod-items-visible(int, int);
+
+    // Scrolls the poster grid to the selected title.
+    public function reveal-vod() {
+        vod.reveal(root.vod-index);
+    }
+
     // Playback.
     in property <image> frame;
     in property <string> video-note;
@@ -124,8 +144,10 @@ export component AppWindow inherits Window {
             guide-keys.focus();
         } else if (root.screen == Screen.search) {
             search.focus-field();
+        } else if (root.screen == Screen.movies || root.screen == Screen.series) {
+            vod.focus-keys();
         } else {
-            player-keys.focus();
+            player-screen.focus-keys();
         }
     }
 
@@ -153,9 +175,17 @@ export component AppWindow inherits Window {
         }
     }
 
+    function next-provider() {
+        if (root.providers.length > 1) {
+            root.view-selected(root.view-index + 1 >= root.providers.length ? -1 : root.view-index + 1);
+        }
+    }
+
     function select-group(index: int) {
         if (root.groups.length > 0) {
-            root.group-selected(max(0, min(root.groups.length - 1, index)));
+            let target = max(0, min(root.groups.length - 1, index));
+            root.group-selected(target);
+            live.reveal-group(target);
         }
     }
 
@@ -184,8 +214,8 @@ export component AppWindow inherits Window {
                 root.navigate(2);
             } else if (event.text == "/" || (event.modifiers.control && event.text.to-lowercase() == "k")) {
                 root.navigate(5);
-            } else if (event.text.to-lowercase() == "p" && root.providers.length > 1) {
-                root.view-selected(root.view-index + 1 >= root.providers.length ? -1 : root.view-index + 1);
+            } else if (event.text.to-lowercase() == "p") {
+                root.next-provider();
             } else {
                 return reject;
             }
@@ -335,113 +365,94 @@ export component AppWindow inherits Window {
         }
     }
 
-    player-keys := FocusScope {
+    vod := VodScreen {
+        visible: root.screen == Screen.movies || root.screen == Screen.series;
+        title: root.screen == Screen.series ? "Series" : "Movies";
+        rail-active: root.screen == Screen.series ? 4 : 3;
+        status: root.vod-status;
+        avatar: root.avatar;
+        view-name: root.view-name;
+        groups: root.vod-groups;
+        group-index: root.vod-group-index;
+        group-title: root.vod-group-title;
+        items: root.vod-items;
+        index <=> root.vod-index;
+        note: root.vod-note;
+        focus-groups <=> root.vod-focus-groups;
+        group-selected(i) => {
+            root.vod-group-selected(i);
+        }
+        open(i) => {
+            root.vod-open(i);
+        }
+        items-visible(first, count) => {
+            root.vod-items-visible(first, count);
+        }
+        navigate(i) => {
+            root.navigate(i);
+        }
+        next-provider => {
+            root.next-provider();
+        }
+        settings-clicked => {
+            settings.show();
+        }
+        switch-clicked => {
+            switcher.show();
+        }
+    }
+
+    player-screen := PlayerScreen {
         visible: root.screen == Screen.player;
-        key-pressed(event) => {
-            let key = event.text.to-lowercase();
-            if (event.text == Key.UpArrow || event.text == Key.PageUp) {
-                root.zap(-1);
-            } else if (event.text == Key.DownArrow || event.text == Key.PageDown) {
-                root.zap(1);
-            } else if (event.text == Key.LeftArrow) {
-                root.seek(-10);
-            } else if (event.text == Key.RightArrow) {
-                root.seek(10);
-            } else if (key == " " || key == "k") {
-                root.toggle-pause();
-            } else if (key == "l" || event.text == Key.End) {
-                root.go-live();
-            } else if (key == "m") {
-                root.toggle-mute();
-            } else if (key == "+" || key == "=") {
-                root.change-volume(5);
-            } else if (key == "-") {
-                root.change-volume(-5);
-            } else if (key == "a") {
-                root.cycle-audio();
-            } else if (key == "s") {
-                root.cycle-subtitles();
-            } else if (key == "f") {
-                root.toggle-fullscreen();
-            } else if (key == "i") {
-                root.info-visible = !root.info-visible;
-            } else if (event.text == Key.Escape && root.info-visible) {
-                root.info-visible = false;
-            } else if (event.text == Key.Escape) {
-                root.escape();
-            } else if (event.text == Key.Backspace) {
-                root.back();
-            } else {
-                root.show-banner();
-                return reject;
-            }
+        frame: root.screen == Screen.player ? root.frame : @image-url("");
+        channel: root.current;
+        programme: root.programme;
+        state: root.player;
+        video-note: root.video-note;
+        banner-visible: root.banner-visible;
+        info-visible <=> root.info-visible;
+        info: root.info;
+        back => {
+            root.back();
+        }
+        escape => {
+            root.escape();
+        }
+        zap(delta) => {
+            root.zap(delta);
+        }
+        show-banner => {
             root.show-banner();
-            accept
         }
-        // Under the banner, so its buttons get their clicks first.
-        TouchArea {
-            mouse-cursor: default;
-            moved => {
-                root.show-banner();
-            }
-            clicked => {
-                root.show-banner();
-            }
-            double-clicked => {
-                root.toggle-fullscreen();
-            }
+        toggle-pause => {
+            root.toggle-pause();
         }
-        PlayerScreen {
-            frame: root.screen == Screen.player ? root.frame : @image-url("");
-            channel: root.current;
-            programme: root.programme;
-            state: root.player;
-            video-note: root.video-note;
-            banner-visible: root.banner-visible;
-            info-visible: root.info-visible;
-            info: root.info;
-            back => {
-                root.back();
-            }
-            toggle-pause => {
-                root.toggle-pause();
-                root.show-banner();
-            }
-            seek(seconds) => {
-                root.seek(seconds);
-                root.show-banner();
-            }
-            seek-to(fraction) => {
-                root.seek-to(fraction);
-                root.show-banner();
-            }
-            set-volume(percent) => {
-                root.set-volume(percent);
-                root.show-banner();
-            }
-            toggle-info => {
-                root.info-visible = !root.info-visible;
-                root.show-banner();
-            }
-            go-live => {
-                root.go-live();
-                root.show-banner();
-            }
-            toggle-mute => {
-                root.toggle-mute();
-                root.show-banner();
-            }
-            cycle-audio => {
-                root.cycle-audio();
-                root.show-banner();
-            }
-            cycle-subtitles => {
-                root.cycle-subtitles();
-                root.show-banner();
-            }
-            toggle-fullscreen => {
-                root.toggle-fullscreen();
-            }
+        seek(seconds) => {
+            root.seek(seconds);
+        }
+        seek-to(fraction) => {
+            root.seek-to(fraction);
+        }
+        set-volume(percent) => {
+            root.set-volume(percent);
+        }
+        change-volume(delta) => {
+            root.change-volume(delta);
+        }
+        go-live => {
+            root.go-live();
+        }
+        toggle-mute => {
+            root.toggle-mute();
+        }
+        cycle-audio => {
+            root.cycle-audio();
+        }
+        cycle-subtitles => {
+            root.cycle-subtitles();
+        }
+        toggle-fullscreen => {
+            root.toggle-fullscreen();
         }
     }
 

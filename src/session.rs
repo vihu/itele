@@ -14,6 +14,7 @@ mod player;
 mod providers;
 mod search;
 mod timefmt;
+mod vod;
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -22,10 +23,11 @@ use std::time::{Duration, Instant};
 
 use itele::epg::{Programme, Store};
 use itele::provider::{Library, Paths, Provider};
-use itele::xtream::{Credentials, LiveStream};
+use itele::xtream::{Credentials, LiveStream, Movie, Show};
 use mpv_engine::{EndReason, Engine, PlaybackEvent};
 use slint::{ComponentHandle, SharedString, Timer, TimerMode, VecModel};
 
+use crate::art::Art;
 use crate::live::{Catalog, View};
 use crate::logos::Logos;
 use crate::names::thousands;
@@ -54,6 +56,7 @@ pub struct Session {
     engine: Arc<Engine>,
     state: RefCell<State>,
     logos: RefCell<Logos>,
+    art: RefCell<Art>,
     /// Read side of the guide store; imports write through their own
     /// connection on a worker thread.
     guide: RefCell<Option<Store>>,
@@ -84,6 +87,9 @@ struct State {
     visible: std::ops::Range<usize>,
     grid: grid::Grid,
     search: search::Search,
+    movies: crate::vod::Catalog<Movie>,
+    shows: crate::vod::Catalog<Show>,
+    browse: vod::Browse,
     playing: Option<Playing>,
     /// Source of [`Slot::epoch`] values.
     next_epoch: u64,
@@ -96,6 +102,8 @@ struct Slot {
     status: String,
     /// How the last guide import went; empty before the first one.
     guide: String,
+    movies: vod::ShelfState,
+    shows: vod::ShelfState,
     /// Results of work started for an earlier slot with the same provider
     /// (signed out since) carry another epoch and are dropped.
     epoch: u64,
@@ -117,6 +125,9 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
     let logos = Logos::start(paths.logos_dir(), |url, path| {
         on_ui_thread(move |s| s.logo_ready(url, path));
     });
+    let art = Art::start(paths.art_dir(), |url, size, picture| {
+        on_ui_thread(move |s| s.art_ready(url, size, picture));
+    });
     let guide = Store::open(&paths.guide_path()).ok();
     let session = Rc::new(Session {
         app: app.as_weak(),
@@ -124,6 +135,7 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
         engine,
         state: RefCell::default(),
         logos: RefCell::new(logos),
+        art: RefCell::new(art),
         guide: RefCell::new(guide),
         select_timer: Timer::default(),
         banner_timer: Timer::default(),
@@ -181,6 +193,8 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
     app.on_search_edited(|_| with_session(|s| s.search_edited()));
     app.on_search_picked(|i| with_session(|s| s.search_picked(i)));
     app.on_search_move(|delta| with_session(|s| s.search_move(delta)));
+    app.on_vod_group_selected(|i| with_session(|s| s.vod_group_selected(i)));
+    app.on_vod_items_visible(|first, count| with_session(|s| s.vod_items_visible(first, count)));
     app.on_cycle_audio(|| with_session(|s| playback::next_audio(&s.engine)));
     app.on_cycle_subtitles(|| with_session(|s| playback::next_subtitles(&s.engine)));
 

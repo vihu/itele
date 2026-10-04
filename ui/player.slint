@@ -5,6 +5,7 @@
 import { Theme } from "theme.slint";
 import { Button, ButtonKind, ChannelLogo, LiveMarker, Tag } from "atoms.slint";
 import { ChannelItem, ProgrammeInfo } from "models.slint";
+import { IconButton, Track } from "controls.slint";
 
 export struct PlayerState {
     paused: bool,
@@ -35,82 +36,6 @@ export struct InfoLine {
     pairs: [InfoPair],
 }
 
-component IconButton inherits Rectangle {
-    in property <image> icon;
-    in property <bool> active;
-    in property <bool> big;
-    in property <string> badge;
-    callback clicked();
-    width: big ? 52px : 44px;
-    height: self.width;
-    border-radius: self.width / 2;
-    background: touch.has-hover ? #ffffff1f : transparent;
-    Image {
-        source: root.icon;
-        width: root.big ? 34px : 24px;
-        height: self.width;
-        colorize: root.active ? Theme.accent : Theme.text;
-    }
-    if root.badge != "": Text {
-        y: (parent.height - self.height) / 2 + 1px;
-        text: root.badge;
-        color: Theme.text;
-        font-size: 8.5px;
-        font-weight: 800;
-    }
-    touch := TouchArea {
-        mouse-cursor: pointer;
-        clicked => {
-            root.clicked();
-        }
-    }
-}
-
-// A thin track with a round handle; reports where it was pressed or dragged.
-component Track inherits Rectangle {
-    in property <float> value;
-    in property <color> fill: Theme.accent;
-    in property <length> handle: 14px;
-    callback changed(float);
-    height: 18px;
-    property <length> thickness: touch.has-hover ? 6px : 4px;
-    Rectangle {
-        y: (parent.height - root.thickness) / 2;
-        height: root.thickness;
-        border-radius: root.thickness / 2;
-        background: #ffffff4d;
-    }
-    Rectangle {
-        x: 0;
-        y: (parent.height - root.thickness) / 2;
-        width: parent.width * root.value;
-        height: root.thickness;
-        border-radius: root.thickness / 2;
-        background: root.fill;
-    }
-    Rectangle {
-        x: parent.width * root.value - root.handle / 2;
-        y: (parent.height - root.handle) / 2;
-        width: root.handle;
-        height: root.handle;
-        border-radius: root.handle / 2;
-        background: root.fill;
-    }
-    touch := TouchArea {
-        mouse-cursor: pointer;
-        pointer-event(event) => {
-            if (event.kind == PointerEventKind.down) {
-                root.changed(max(0, min(1, self.mouse-x / self.width)));
-            }
-        }
-        moved => {
-            if (self.pressed) {
-                root.changed(max(0, min(1, self.mouse-x / self.width)));
-            }
-        }
-    }
-}
-
 export component PlayerScreen inherits Rectangle {
     in property <image> frame;
     in property <ChannelItem> channel;
@@ -118,26 +43,89 @@ export component PlayerScreen inherits Rectangle {
     in property <PlayerState> state;
     in property <string> video-note;
     in property <bool> banner-visible;
-    in property <bool> info-visible;
+    in-out property <bool> info-visible;
     in property <[InfoLine]> info;
     callback back();
+    callback escape();
+    callback zap(int);
+    callback show-banner();
     callback toggle-pause();
     callback seek(float);
     callback seek-to(float);
     callback go-live();
     callback toggle-mute();
     callback set-volume(float);
+    callback change-volume(float);
     callback cycle-audio();
     callback cycle-subtitles();
-    callback toggle-info();
     callback toggle-fullscreen();
 
+    public function focus-keys() {
+        keys.focus();
+    }
+
     background: #000;
+    keys := FocusScope {
+        key-pressed(event) => {
+            let key = event.text.to-lowercase();
+            if (event.text == Key.UpArrow || event.text == Key.PageUp) {
+                root.zap(-1);
+            } else if (event.text == Key.DownArrow || event.text == Key.PageDown) {
+                root.zap(1);
+            } else if (event.text == Key.LeftArrow) {
+                root.seek(-10);
+            } else if (event.text == Key.RightArrow) {
+                root.seek(10);
+            } else if (key == " " || key == "k") {
+                root.toggle-pause();
+            } else if (key == "l" || event.text == Key.End) {
+                root.go-live();
+            } else if (key == "m") {
+                root.toggle-mute();
+            } else if (key == "+" || key == "=") {
+                root.change-volume(5);
+            } else if (key == "-") {
+                root.change-volume(-5);
+            } else if (key == "a") {
+                root.cycle-audio();
+            } else if (key == "s") {
+                root.cycle-subtitles();
+            } else if (key == "f") {
+                root.toggle-fullscreen();
+            } else if (key == "i") {
+                root.info-visible = !root.info-visible;
+            } else if (event.text == Key.Escape && root.info-visible) {
+                root.info-visible = false;
+            } else if (event.text == Key.Escape) {
+                root.escape();
+            } else if (event.text == Key.Backspace) {
+                root.back();
+            } else {
+                root.show-banner();
+                return reject;
+            }
+            root.show-banner();
+            accept
+        }
+    }
     Image {
         width: 100%;
         height: 100%;
         source: root.frame;
         image-fit: fill;
+    }
+    // Under the banner, so its buttons get their clicks first.
+    TouchArea {
+        mouse-cursor: default;
+        moved => {
+            root.show-banner();
+        }
+        clicked => {
+            root.show-banner();
+        }
+        double-clicked => {
+            root.toggle-fullscreen();
+        }
     }
     if root.video-note != "": Text {
         text: root.video-note;
@@ -293,6 +281,7 @@ export component PlayerScreen inherits Rectangle {
                     value: root.state.position;
                     changed(fraction) => {
                         root.seek-to(fraction);
+                        root.show-banner();
                     }
                 }
             }
@@ -309,6 +298,7 @@ export component PlayerScreen inherits Rectangle {
                         icon: @image-url("icons/audio.svg");
                         clicked => {
                             root.cycle-audio();
+                            root.show-banner();
                         }
                     }
                     IconButton {
@@ -316,6 +306,7 @@ export component PlayerScreen inherits Rectangle {
                         active: root.state.subtitles != "";
                         clicked => {
                             root.cycle-subtitles();
+                            root.show-banner();
                         }
                     }
                     IconButton {
@@ -323,6 +314,7 @@ export component PlayerScreen inherits Rectangle {
                         active: root.state.muted;
                         clicked => {
                             root.toggle-mute();
+                            root.show-banner();
                         }
                     }
                     VerticalLayout {
@@ -334,6 +326,7 @@ export component PlayerScreen inherits Rectangle {
                             value: root.state.muted ? 0 : min(1, root.state.volume / 100);
                             changed(fraction) => {
                                 root.set-volume(fraction * 100);
+                                root.show-banner();
                             }
                         }
                     }
@@ -359,6 +352,7 @@ export component PlayerScreen inherits Rectangle {
                                 mouse-cursor: pointer;
                                 clicked => {
                                     root.go-live();
+                                    root.show-banner();
                                 }
                             }
                         }
@@ -385,6 +379,7 @@ export component PlayerScreen inherits Rectangle {
                                 mouse-cursor: pointer;
                                 clicked => {
                                     root.go-live();
+                                    root.show-banner();
                                 }
                             }
                         }
@@ -400,6 +395,7 @@ export component PlayerScreen inherits Rectangle {
                         badge: "10";
                         clicked => {
                             root.seek(-10);
+                            root.show-banner();
                         }
                     }
                     IconButton {
@@ -407,6 +403,7 @@ export component PlayerScreen inherits Rectangle {
                         icon: root.state.paused ? @image-url("icons/play.svg") : @image-url("icons/pause.svg");
                         clicked => {
                             root.toggle-pause();
+                            root.show-banner();
                         }
                     }
                     IconButton {
@@ -414,6 +411,7 @@ export component PlayerScreen inherits Rectangle {
                         badge: "10";
                         clicked => {
                             root.seek(10);
+                            root.show-banner();
                         }
                     }
                 }
@@ -426,7 +424,8 @@ export component PlayerScreen inherits Rectangle {
                         icon: @image-url("icons/info.svg");
                         active: root.info-visible;
                         clicked => {
-                            root.toggle-info();
+                            root.info-visible = !root.info-visible;
+                            root.show-banner();
                         }
                     }
                     IconButton {

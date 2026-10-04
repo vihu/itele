@@ -5,6 +5,7 @@
 
 #![deny(unsafe_code, missing_docs, rustdoc::broken_intra_doc_links)]
 
+mod art;
 mod info;
 mod live;
 mod logos;
@@ -12,6 +13,7 @@ mod names;
 mod playback;
 mod session;
 mod video;
+mod vod;
 
 /// The compiled Slint UI from `ui/`.
 mod ui {

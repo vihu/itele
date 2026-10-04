@@ -10,6 +10,7 @@ use slint::{Image, ModelRc, SharedString, VecModel};
 use super::{Session, Slot, guide, host_of, initials, library_status, on_ui_thread};
 use crate::live::{Source, View};
 use crate::ui::{ProviderItem, Screen};
+use crate::vod::Shelves;
 
 impl Session {
     /// Opens every saved provider, or the login screen when there is none.
@@ -91,6 +92,8 @@ impl Session {
             };
             let slot = state.slots.remove(index);
             state.catalog.remove(&slot.provider.id);
+            state.movies.remove(&slot.provider.id);
+            state.shows.remove(&slot.provider.id);
             let was_playing = state
                 .playing
                 .as_ref()
@@ -204,6 +207,9 @@ impl Session {
         app.set_groups(ModelRc::new(VecModel::from(groups)));
         app.set_status(self.view_status());
         self.select_group(group);
+        if matches!(app.get_screen(), Screen::Movies | Screen::Series) {
+            self.refresh_vod();
+        }
     }
 }
 
@@ -235,6 +241,8 @@ impl Session {
                 credentials: None,
                 status,
                 guide: String::new(),
+                movies: Default::default(),
+                shows: Default::default(),
                 epoch,
             });
             epoch
@@ -298,7 +306,12 @@ impl Session {
             };
             slot.credentials = Some(credentials);
         }
-        if self.state.borrow().playing.is_none() {
+        // Screens without a preview keep it off until Live TV shows again.
+        let previewing = self
+            .app
+            .upgrade()
+            .is_some_and(|app| matches!(app.get_screen(), Screen::Live | Screen::Guide));
+        if previewing && self.state.borrow().playing.is_none() {
             self.play_selected();
         }
     }

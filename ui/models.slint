@@ -107,3 +107,15 @@ export struct SearchItem {
     // Ended and replayable.
     replay: bool,
 }
+
+// A movie or series in the poster grid.
+export struct PosterItem {
+    title: string,
+    // Year, and the provider when every provider is listed.
+    detail: string,
+    // Out of 10, for example "7.4"; empty when unrated.
+    rating: string,
+    tint: color,
+    poster: image,
+    has-poster: bool,
+}

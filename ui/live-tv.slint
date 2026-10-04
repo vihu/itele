@@ -6,7 +6,8 @@ import { Theme } from "theme.slint";
 import { Button, ButtonKind, ChannelLogo, Hint, LiveMarker, Tag } from "atoms.slint";
 import { ChannelItem, GroupItem, ProgrammeInfo, UpcomingItem } from "models.slint";
 import { Rail } from "rail.slint";
-import { ChannelRow, GroupRow } from "rows.slint";
+import { ChannelRow } from "rows.slint";
+import { GroupsColumn } from "groups.slint";
 
 export { ChannelItem, GroupItem, ProgrammeInfo, UpcomingItem }
 
@@ -41,6 +42,11 @@ export component LiveTvScreen inherits Rectangle {
 
     property <ChannelItem> current: root.channel-index >= 0 && root.channel-index < root.channels.length ? root.channels[root.channel-index] : { name: "" };
 
+    // Scrolls the groups so `index` is visible.
+    public function reveal-group(index: int) {
+        groups.reveal(index);
+    }
+
     // Scrolls the channel list so row `index` is visible.
     public function reveal(index: int) {
         if (index * 74px < -list.content-y) {
@@ -65,86 +71,17 @@ export component LiveTvScreen inherits Rectangle {
         VerticalLayout {
             HorizontalLayout {
                 vertical-stretch: 1;
-                // Groups.
-                Rectangle {
-                    width: 250px;
-                    VerticalLayout {
-                        padding-top: 24px;
-                        padding-left: 12px;
-                        padding-right: 12px;
-                        spacing: 2px;
-                        VerticalLayout {
-                            padding-left: 12px;
-                            spacing: 2px;
-                            Text {
-                                text: "Live TV";
-                                color: Theme.text;
-                                font-size: Theme.fs-2xl;
-                                font-weight: 800;
-                            }
-                            Text {
-                                text: root.status;
-                                color: Theme.text-3;
-                                font-size: Theme.fs-sm;
-                                overflow: elide;
-                            }
-                        }
-                        Rectangle {
-                            height: 10px;
-                        }
-                        // Provider switcher.
-                        Rectangle {
-                            height: 40px;
-                            border-radius: Theme.radius-sm;
-                            background: switch-touch.has-hover ? Theme.surface-3 : Theme.surface-2;
-                            HorizontalLayout {
-                                padding-left: 12px;
-                                padding-right: 10px;
-                                spacing: 8px;
-                                Text {
-                                    text: root.view-name;
-                                    color: Theme.text;
-                                    font-size: Theme.fs-md;
-                                    font-weight: 600;
-                                    vertical-alignment: center;
-                                    overflow: elide;
-                                    horizontal-stretch: 1;
-                                }
-                                VerticalLayout {
-                                    alignment: center;
-                                    Image {
-                                        source: @image-url("icons/down.svg");
-                                        width: 16px;
-                                        height: 16px;
-                                        colorize: Theme.text-2;
-                                    }
-                                }
-                            }
-                            switch-touch := TouchArea {
-                                mouse-cursor: pointer;
-                                clicked => {
-                                    root.switch-clicked();
-                                }
-                            }
-                        }
-                        Rectangle {
-                            height: 16px;
-                        }
-                        ListView {
-                            vertical-stretch: 1;
-                            for group[i] in root.groups: GroupRow {
-                                item: group;
-                                selected: i == root.group-index;
-                                clicked => {
-                                    root.group-selected(i);
-                                }
-                            }
-                        }
+                groups := GroupsColumn {
+                    title: "Live TV";
+                    status: root.status;
+                    view-name: root.view-name;
+                    groups: root.groups;
+                    group-index: root.group-index;
+                    group-selected(i) => {
+                        root.group-selected(i);
                     }
-                    Rectangle {
-                        x: parent.width - 1px;
-                        width: 1px;
-                        background: Theme.line;
+                    switch-clicked => {
+                        root.switch-clicked();
                     }
                 }
                 // Channels.

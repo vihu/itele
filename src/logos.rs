@@ -106,19 +106,25 @@ fn work(
         let Ok(url) = requests.lock().expect("no worker panics holding it").recv() else {
             return;
         };
-        let path = download(agent, dir, &url);
+        let path = download(agent, dir, &url, MAX_BYTES);
         done(url, path);
     }
 }
 
-/// Downloads `url` into the cache; `None` on any failure.
-fn download(agent: &ureq::Agent, dir: &Utf8Path, url: &str) -> Option<Utf8PathBuf> {
+/// Downloads `url` into the cache, reading at most `max_bytes`; `None` on
+/// any failure.
+pub(crate) fn download(
+    agent: &ureq::Agent,
+    dir: &Utf8Path,
+    url: &str,
+    max_bytes: u64,
+) -> Option<Utf8PathBuf> {
     let mut response = agent.get(url).call().ok()?;
     let mut bytes = Vec::new();
     response
         .body_mut()
         .as_reader()
-        .take(MAX_BYTES)
+        .take(max_bytes)
         .read_to_end(&mut bytes)
         .ok()?;
     if bytes.is_empty() {
@@ -133,7 +139,7 @@ fn download(agent: &ureq::Agent, dir: &Utf8Path, url: &str) -> Option<Utf8PathBu
 }
 
 /// `dir/<hash of url>.<extension from url>`; `png` when the URL has none.
-fn cache_path(dir: &Utf8Path, url: &str) -> Utf8PathBuf {
+pub(crate) fn cache_path(dir: &Utf8Path, url: &str) -> Utf8PathBuf {
     // FNV-1a: stable across runs, unlike the std hasher.
     let hash = url.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |h, b| {
         (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)

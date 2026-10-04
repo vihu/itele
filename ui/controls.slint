@@ -1,0 +1,79 @@
+// The player's round icon buttons and thin seek and volume tracks.
+
+import { Theme } from "theme.slint";
+
+export component IconButton inherits Rectangle {
+    in property <image> icon;
+    in property <bool> active;
+    in property <bool> big;
+    in property <string> badge;
+    callback clicked();
+    width: big ? 52px : 44px;
+    height: self.width;
+    border-radius: self.width / 2;
+    background: touch.has-hover ? #ffffff1f : transparent;
+    Image {
+        source: root.icon;
+        width: root.big ? 34px : 24px;
+        height: self.width;
+        colorize: root.active ? Theme.accent : Theme.text;
+    }
+    if root.badge != "": Text {
+        y: (parent.height - self.height) / 2 + 1px;
+        text: root.badge;
+        color: Theme.text;
+        font-size: 8.5px;
+        font-weight: 800;
+    }
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+// A thin track with a round handle; reports where it was pressed or dragged.
+export component Track inherits Rectangle {
+    in property <float> value;
+    in property <color> fill: Theme.accent;
+    in property <length> handle: 14px;
+    callback changed(float);
+    height: 18px;
+    property <length> thickness: touch.has-hover ? 6px : 4px;
+    Rectangle {
+        y: (parent.height - root.thickness) / 2;
+        height: root.thickness;
+        border-radius: root.thickness / 2;
+        background: #ffffff4d;
+    }
+    Rectangle {
+        x: 0;
+        y: (parent.height - root.thickness) / 2;
+        width: parent.width * root.value;
+        height: root.thickness;
+        border-radius: root.thickness / 2;
+        background: root.fill;
+    }
+    Rectangle {
+        x: parent.width * root.value - root.handle / 2;
+        y: (parent.height - root.handle) / 2;
+        width: root.handle;
+        height: root.handle;
+        border-radius: root.handle / 2;
+        background: root.fill;
+    }
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down) {
+                root.changed(max(0, min(1, self.mouse-x / self.width)));
+            }
+        }
+        moved => {
+            if (self.pressed) {
+                root.changed(max(0, min(1, self.mouse-x / self.width)));
+            }
+        }
+    }
+}

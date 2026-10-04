@@ -1,0 +1,109 @@
+// The groups column of the browse screens: title, status, the provider
+// switcher, and the groups (Live TV's categories, or Movies' and Series').
+
+import { ListView } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { GroupItem } from "models.slint";
+import { GroupRow } from "rows.slint";
+
+export component GroupsColumn inherits Rectangle {
+    in property <string> title;
+    in property <string> status;
+    in property <string> view-name;
+    in property <[GroupItem]> groups;
+    in property <int> group-index;
+    // Keyboard focus is in the column: the selected group gets a ring.
+    in property <bool> focused;
+    callback group-selected(int);
+    callback switch-clicked();
+
+    // Scrolls the list so group `index` is visible; every row is 40px.
+    public function reveal(index: int) {
+        if (index * 40px < -list.content-y) {
+            list.content-y = -index * 40px;
+        } else if ((index + 1) * 40px > -list.content-y + list.visible-height) {
+            list.content-y = -((index + 1) * 40px - list.visible-height);
+        }
+    }
+
+    width: 250px;
+    VerticalLayout {
+        padding-top: 24px;
+        padding-left: 12px;
+        padding-right: 12px;
+        spacing: 2px;
+        VerticalLayout {
+            padding-left: 12px;
+            spacing: 2px;
+            Text {
+                text: root.title;
+                color: Theme.text;
+                font-size: Theme.fs-2xl;
+                font-weight: 800;
+            }
+            Text {
+                text: root.status;
+                color: Theme.text-3;
+                font-size: Theme.fs-sm;
+                overflow: elide;
+            }
+        }
+        Rectangle {
+            height: 10px;
+        }
+        // Provider switcher.
+        Rectangle {
+            height: 40px;
+            border-radius: Theme.radius-sm;
+            background: switch-touch.has-hover ? Theme.surface-3 : Theme.surface-2;
+            HorizontalLayout {
+                padding-left: 12px;
+                padding-right: 10px;
+                spacing: 8px;
+                Text {
+                    text: root.view-name;
+                    color: Theme.text;
+                    font-size: Theme.fs-md;
+                    font-weight: 600;
+                    vertical-alignment: center;
+                    overflow: elide;
+                    horizontal-stretch: 1;
+                }
+                VerticalLayout {
+                    alignment: center;
+                    Image {
+                        source: @image-url("icons/down.svg");
+                        width: 16px;
+                        height: 16px;
+                        colorize: Theme.text-2;
+                    }
+                }
+            }
+            switch-touch := TouchArea {
+                mouse-cursor: pointer;
+                clicked => {
+                    root.switch-clicked();
+                }
+            }
+        }
+        Rectangle {
+            height: 16px;
+        }
+        list := ListView {
+            vertical-stretch: 1;
+            for group[i] in root.groups: GroupRow {
+                item: group;
+                selected: i == root.group-index;
+                ring: root.focused && i == root.group-index;
+                clicked => {
+                    root.group-selected(i);
+                }
+            }
+        }
+    }
+    Rectangle {
+        x: parent.width - 1px;
+        width: 1px;
+        background: Theme.line;
+    }
+}

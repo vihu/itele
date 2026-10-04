@@ -1,4 +1,4 @@
-// Rows of the Live TV lists: a group, and a channel with now and next.
+// Rows of the browse lists: a group, and a channel with now and next.
 
 import { Theme } from "theme.slint";
 import { ChannelLogo } from "atoms.slint";
@@ -7,10 +7,14 @@ import { ChannelItem, GroupItem } from "models.slint";
 export component GroupRow inherits Rectangle {
     in property <GroupItem> item;
     in property <bool> selected;
+    // Keyboard focus is on this row.
+    in property <bool> ring;
     callback clicked();
     height: 40px;
     border-radius: Theme.radius-sm;
     background: selected ? Theme.accent-soft : touch.has-hover ? Theme.surface-2 : transparent;
+    border-width: ring ? 1px : 0px;
+    border-color: Theme.accent-line;
     HorizontalLayout {
         padding-left: 12px;
         padding-right: 12px;
