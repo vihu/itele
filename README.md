@@ -8,6 +8,8 @@ to one provider or several, browse their channels, movies and series side
 by side, read the guide, search it all, and watch, in one window that
 starts fast and stays light.
 
+## Demo
+
 ## Design
 
 - libmpv does all demuxing, decoding and audio, so every codec and container
@@ -85,32 +87,6 @@ Then sign in to `http://127.0.0.1:8089` as `demo` / `demo`. Start a second
 one with `--port 8090 --prefix "B "` to try several providers;
 `--movies 20000` tries a large catalog and `--posters DIR` uses your own
 images as posters.
-
-## Keys
-
-| Where     | Keys                                                                     |
-| --------- | ------------------------------------------------------------------------ |
-| Anywhere  | `/` or `Ctrl+K` search, `Ctrl+B` sidebar, `Ctrl+,` Settings              |
-| Search    | type in the top bar, `↑` `↓` choose, `Enter` watch or open, `Esc` back   |
-| Search    | with nothing chosen, `Enter` shows all results                           |
-| Home      | arrows move between the rows and along them, `Enter` watch or open       |
-| Live TV   | `↑` `↓` channel, `←` `→` group, `Enter` watch, `F` favorite              |
-| Live TV   | `G` guide, `P` next provider                                             |
-| Favorites | `↑` `↓` choose, `Alt+↑` `Alt+↓` move, `F` or `Delete` remove             |
-| Favorites | `Tab` channels, movies, series; `Enter` watch or open                    |
-| Guide     | arrows move, `PgUp` `PgDn` page, `N` now, `F` favorite, `Enter` watch    |
-| Movies    | arrows move, `←` from the first column to the groups, `Enter` open       |
-| Page      | `Enter` play or resume, `B` from the beginning, `F` favorite, `Esc` back |
-| Page      | on a series: `↑` `↓` episode, `←` `→` season                             |
-| Player    | `Space` pause, `←` `→` seek 10 s, `L` go live, `↑` `↓` change channel    |
-| Player    | `M` mute, `+` `-` volume, `A` audio menu, `S` subtitles menu             |
-| Player    | `F` fullscreen; in a menu `↑` `↓` choose, `Enter` pick, `Esc` close      |
-| Player    | `H` favorite, `I` stream info, `Esc` or `Backspace` back                 |
-
-Series work like Movies. On a movie or an episode the player has no Go live
-or channel keys. Watching from Favorites, `↑` `↓` in the player follow your
-list across providers. In the guide, a click on a channel's name plays it
-in the preview above.
 
 ## How it is checked
 
