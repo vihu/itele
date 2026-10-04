@@ -87,6 +87,11 @@ pub(super) struct RawVodStream {
 }
 
 /// A series in `get_series`, and the `info` of `get_series_info`.
+///
+/// Panels often send one value under several names at once (`releaseDate`
+/// and `release_date`). Serde rejects two aliases of one field in the same
+/// object, so each name is a field of its own here; the parsers take the
+/// first one set.
 #[derive(Deserialize)]
 pub(super) struct RawSeries {
     #[serde(default, deserialize_with = "lenient::u64")]
@@ -105,13 +110,12 @@ pub(super) struct RawSeries {
     pub(super) director: Option<String>,
     #[serde(default, deserialize_with = "lenient::string")]
     pub(super) genre: Option<String>,
-    #[serde(
-        default,
-        alias = "releaseDate",
-        alias = "releasedate",
-        deserialize_with = "lenient::string"
-    )]
+    #[serde(default, deserialize_with = "lenient::string")]
     pub(super) release_date: Option<String>,
+    #[serde(default, rename = "releaseDate", deserialize_with = "lenient::string")]
+    pub(super) release_date_camel: Option<String>,
+    #[serde(default, deserialize_with = "lenient::string")]
+    pub(super) releasedate: Option<String>,
     #[serde(default, deserialize_with = "lenient::string")]
     pub(super) year: Option<String>,
     #[serde(default, deserialize_with = "lenient::u64")]
@@ -142,16 +146,22 @@ pub(super) struct RawMovieDetails {
     pub(super) cover_big: Option<String>,
     #[serde(default, deserialize_with = "lenient::first_string")]
     pub(super) backdrop_path: Option<String>,
-    #[serde(default, alias = "description", deserialize_with = "lenient::string")]
+    #[serde(default, deserialize_with = "lenient::string")]
     pub(super) plot: Option<String>,
-    #[serde(default, alias = "actors", deserialize_with = "lenient::string")]
+    #[serde(default, deserialize_with = "lenient::string")]
+    pub(super) description: Option<String>,
+    #[serde(default, deserialize_with = "lenient::string")]
     pub(super) cast: Option<String>,
+    #[serde(default, deserialize_with = "lenient::string")]
+    pub(super) actors: Option<String>,
     #[serde(default, deserialize_with = "lenient::string")]
     pub(super) director: Option<String>,
     #[serde(default, deserialize_with = "lenient::string")]
     pub(super) genre: Option<String>,
-    #[serde(default, alias = "release_date", deserialize_with = "lenient::string")]
+    #[serde(default, deserialize_with = "lenient::string")]
     pub(super) releasedate: Option<String>,
+    #[serde(default, deserialize_with = "lenient::string")]
+    pub(super) release_date: Option<String>,
     #[serde(default, deserialize_with = "lenient::u64")]
     pub(super) duration_secs: Option<u64>,
     #[serde(default, deserialize_with = "lenient::string")]
@@ -210,13 +220,12 @@ pub(super) struct RawEpisodeInfo {
     pub(super) movie_image: Option<String>,
     #[serde(default, deserialize_with = "lenient::string")]
     pub(super) plot: Option<String>,
-    #[serde(
-        default,
-        alias = "release_date",
-        alias = "air_date",
-        deserialize_with = "lenient::string"
-    )]
+    #[serde(default, deserialize_with = "lenient::string")]
     pub(super) releasedate: Option<String>,
+    #[serde(default, deserialize_with = "lenient::string")]
+    pub(super) release_date: Option<String>,
+    #[serde(default, deserialize_with = "lenient::string")]
+    pub(super) air_date: Option<String>,
     #[serde(default, deserialize_with = "lenient::u64")]
     pub(super) duration_secs: Option<u64>,
     #[serde(default, deserialize_with = "lenient::string")]

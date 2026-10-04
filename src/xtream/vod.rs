@@ -214,11 +214,16 @@ pub fn parse_shows(json: &str) -> Result<Vec<Show>> {
             let name = s.name.unwrap_or_default();
             Some(Show {
                 id: SeriesId(s.series_id?),
-                year: [s.year.as_deref(), s.release_date.as_deref()]
-                    .into_iter()
-                    .flatten()
-                    .find_map(year_in)
-                    .or_else(|| year_ending(&name)),
+                year: [
+                    s.year.as_deref(),
+                    s.release_date.as_deref(),
+                    s.release_date_camel.as_deref(),
+                    s.releasedate.as_deref(),
+                ]
+                .into_iter()
+                .flatten()
+                .find_map(year_in)
+                .or_else(|| year_ending(&name)),
                 name,
                 category_id: s.category_id.map(CategoryId),
                 poster: s.cover,
@@ -237,11 +242,11 @@ pub fn parse_shows(json: &str) -> Result<Vec<Show>> {
 pub fn parse_movie_info(json: &str) -> Result<MovieInfo> {
     let raw: RawVodInfo = serde_json::from_str(json).map_err(Error::Json)?;
     let details = raw.info.map_or_else(Details::default, |i| Details {
-        plot: i.plot.unwrap_or_default(),
-        cast: i.cast.unwrap_or_default(),
+        plot: first([i.plot, i.description]),
+        cast: first([i.cast, i.actors]),
         director: i.director.unwrap_or_default(),
         genre: i.genre.unwrap_or_default(),
-        released: i.releasedate.unwrap_or_default(),
+        released: first([i.releasedate, i.release_date]),
         duration: seconds(i.duration_secs, i.duration.as_deref()),
         rating: i.rating,
         backdrop: i.backdrop_path,
@@ -294,7 +299,7 @@ pub fn parse_show_info(json: &str) -> Result<ShowInfo> {
         cast: i.cast.unwrap_or_default(),
         director: i.director.unwrap_or_default(),
         genre: i.genre.unwrap_or_default(),
-        released: i.release_date.unwrap_or_default(),
+        released: first([i.release_date, i.release_date_camel, i.releasedate]),
         duration: i
             .episode_run_time
             .and_then(|m| m.trim().parse::<u32>().ok())
@@ -317,7 +322,7 @@ fn episode(e: RawEpisode) -> Option<Episode> {
         Some(i) => (
             i.movie_image,
             i.plot.unwrap_or_default(),
-            i.releasedate.unwrap_or_default(),
+            first([i.releasedate, i.release_date, i.air_date]),
             seconds(i.duration_secs, i.duration.as_deref()),
         ),
         None => (None, String::new(), String::new(), None),
@@ -339,6 +344,11 @@ fn episode(e: RawEpisode) -> Option<Episode> {
         still,
         released,
     })
+}
+
+/// The first of several names for one value that the panel set.
+fn first<const N: usize>(names: [Option<String>; N]) -> String {
+    names.into_iter().flatten().next().unwrap_or_default()
 }
 
 fn season_name(number: u32) -> String {
@@ -487,6 +497,36 @@ mod tests {
             creds.episode_url(&EpisodeId("90/02".into()), "mp4"),
             "http://host.tv:8080/series/al%20ice/p%2Fss/90%2F02.mp4"
         );
+    }
+
+    #[test]
+    fn one_value_under_several_names_parses() {
+        // Real panels send these pairs together; aliases would reject them.
+        let shows = parse_shows(
+            r#"[{"series_id":1,"name":"A","releaseDate":"2019-01-01","release_date":"2019-01-01",
+                 "releasedate":"2019"}]"#,
+        )
+        .unwrap();
+        assert_eq!(shows[0].year, Some(2019));
+        let movie = parse_movie_info(
+            r#"{"info":{"plot":"","description":"A rabbit.","cast":"Ana","actors":"Ana",
+                "releasedate":"2026-01-02","release_date":"2026-01-02"}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            movie.details.plot, "A rabbit.",
+            "an empty name falls through"
+        );
+        assert_eq!(movie.details.cast, "Ana");
+        assert_eq!(movie.details.released, "2026-01-02");
+        let show = parse_show_info(
+            r#"{"info":{"releaseDate":"2019-01-01","release_date":"2019-01-01"},
+                "episodes":{"1":[{"id":"9","episode_num":1,
+                  "info":{"releasedate":"2019-02-01","air_date":"2019-02-01"}}]}}"#,
+        )
+        .unwrap();
+        assert_eq!(show.details.released, "2019-01-01");
+        assert_eq!(show.episodes[0].released, "2019-02-01");
     }
 
     #[test]
