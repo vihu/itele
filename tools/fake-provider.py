@@ -35,7 +35,7 @@ GROUPS = {
 COLORS = ["#1f5e3b", "#2a3cc7", "#b3261e", "#0f6e8c", "#3b3f4a", "#c2185b", "#5b6b2e", "#d35400", "#6b5ca5"]
 
 
-def build_catalog(host):
+def build_catalog(host, prefix):
     categories, streams, number = [], [], 1
     rng = random.Random(7)
     for cat_id, (group, names) in enumerate(GROUPS.items(), start=1):
@@ -44,7 +44,7 @@ def build_catalog(host):
             sid = 1000 + number
             streams.append({
                 "num": number,
-                "name": name,
+                "name": prefix + name,
                 "stream_type": "live",
                 "stream_id": sid,
                 # Every third channel has no logo, to exercise the fallback tile.
@@ -160,9 +160,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--port", type=int, default=8089)
     parser.add_argument("--media", nargs="*", default=[], help="video files to serve as channels")
+    parser.add_argument("--prefix", default="", help="prefix for channel names, to tell providers apart")
     args = parser.parse_args()
     Handler.host = f"http://127.0.0.1:{args.port}"
-    Handler.categories, Handler.streams = build_catalog(Handler.host)
+    Handler.categories, Handler.streams = build_catalog(Handler.host, args.prefix)
     Handler.media = args.media
     print(f"Server: {Handler.host}  username: {USER}  password: {PASSWORD}")
     print(f"{len(Handler.streams)} channels in {len(Handler.categories)} groups, {len(args.media)} media files")

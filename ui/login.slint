@@ -55,7 +55,9 @@ export component LoginScreen inherits Rectangle {
     in-out property <string> password;
     in property <string> error;
     in property <bool> busy;
+    in property <bool> can-cancel;
     callback submit();
+    callback cancel();
 
     public function focus-first() {
         server-field.focus();
@@ -85,7 +87,9 @@ export component LoginScreen inherits Rectangle {
                     }
                 }
                 Text {
-                    text: "Add your IPTV provider. Use the Xtream Codes details your provider sent you.";
+                    text: root.can-cancel
+                        ? "Add another IPTV provider. Its channels join the ones you already have."
+                        : "Add your IPTV provider. Use the Xtream Codes details your provider sent you.";
                     color: Theme.text-2;
                     font-size: Theme.fs-md;
                     wrap: word-wrap;
@@ -126,12 +130,20 @@ export component LoginScreen inherits Rectangle {
                 }
                 HorizontalLayout {
                     alignment: start;
+                    spacing: 10px;
                     Button {
                         kind: ButtonKind.primary;
                         text: root.busy ? "Signing in…" : "Sign in";
                         enabled: !root.busy && root.server != "" && root.username != "" && root.password != "";
                         clicked => {
                             root.submit();
+                        }
+                    }
+                    if root.can-cancel: Button {
+                        kind: ButtonKind.ghost;
+                        text: "Cancel";
+                        clicked => {
+                            root.cancel();
                         }
                     }
                 }

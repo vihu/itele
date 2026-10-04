@@ -127,6 +127,22 @@ impl Paths {
         write_atomic(&self.config.join(PROVIDERS_FILE), &json)
     }
 
+    /// Saves `provider` in the list: replaces the entry with the same id in
+    /// place, or appends it.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] or [`Error::Config`] when the provider list
+    /// cannot be read or written.
+    pub fn add_provider(&self, provider: &Provider) -> Result {
+        let mut providers = self.load_providers()?;
+        match providers.iter_mut().find(|p| p.id == provider.id) {
+            Some(slot) => *slot = provider.clone(),
+            None => providers.push(provider.clone()),
+        }
+        self.save_providers(&providers)
+    }
+
     /// Removes `provider` from the saved list and deletes its cache. The
     /// keychain entry is separate: see [`Provider::forget_password`].
     ///
@@ -382,6 +398,20 @@ mod tests {
         assert_eq!(paths.load_providers().unwrap(), vec![provider()]);
         let text = fs::read_to_string(paths.config.join(PROVIDERS_FILE)).unwrap();
         assert!(!text.contains("s3cret"), "{text}");
+    }
+
+    #[test]
+    fn add_provider_replaces_by_id_or_appends() {
+        let (_dir, paths) = temp_paths();
+        let other = Provider::new("Other", &Credentials::new("other.tv", "bob", "x").unwrap());
+        paths.add_provider(&provider()).unwrap();
+        paths.add_provider(&other).unwrap();
+        let renamed = Provider {
+            name: "Renamed".into(),
+            ..provider()
+        };
+        paths.add_provider(&renamed).unwrap();
+        assert_eq!(paths.load_providers().unwrap(), vec![renamed, other]);
     }
 
     #[test]

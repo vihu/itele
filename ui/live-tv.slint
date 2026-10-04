@@ -8,6 +8,8 @@ import { Button, ButtonKind, ChannelLogo, Hint, LiveMarker, Tag } from "atoms.sl
 export struct GroupItem {
     name: string,
     count: string,
+    // The group's provider, shown when every provider is listed.
+    provider: string,
 }
 
 export struct ChannelItem {
@@ -133,6 +135,14 @@ component GroupRow inherits Rectangle {
             overflow: elide;
             horizontal-stretch: 1;
         }
+        if root.item.provider != "": Text {
+            text: root.item.provider;
+            color: root.selected ? Theme.accent : Theme.text-3;
+            font-size: Theme.fs-xs;
+            vertical-alignment: center;
+            overflow: elide;
+            max-width: 90px;
+        }
         Text {
             text: root.item.count;
             color: root.selected ? Theme.accent : Theme.text-3;
@@ -227,6 +237,7 @@ export component LiveTvScreen inherits Rectangle {
     in property <string> group-title;
     in property <string> status;
     in property <string> avatar;
+    in property <string> view-name;
     in property <image> frame;
     in property <string> video-note;
     out property <length> video-width: video.width;
@@ -235,6 +246,7 @@ export component LiveTvScreen inherits Rectangle {
     callback channel-selected(int);
     callback watch();
     callback settings-clicked();
+    callback switch-clicked();
 
     property <ChannelItem> current: root.channel-index >= 0 && root.channel-index < root.channels.length ? root.channels[root.channel-index] : { name: "" };
 
@@ -280,6 +292,44 @@ export component LiveTvScreen inherits Rectangle {
                                 color: Theme.text-3;
                                 font-size: Theme.fs-sm;
                                 overflow: elide;
+                            }
+                        }
+                        Rectangle {
+                            height: 10px;
+                        }
+                        // Provider switcher.
+                        Rectangle {
+                            height: 40px;
+                            border-radius: Theme.radius-sm;
+                            background: switch-touch.has-hover ? Theme.surface-3 : Theme.surface-2;
+                            HorizontalLayout {
+                                padding-left: 12px;
+                                padding-right: 10px;
+                                spacing: 8px;
+                                Text {
+                                    text: root.view-name;
+                                    color: Theme.text;
+                                    font-size: Theme.fs-md;
+                                    font-weight: 600;
+                                    vertical-alignment: center;
+                                    overflow: elide;
+                                    horizontal-stretch: 1;
+                                }
+                                VerticalLayout {
+                                    alignment: center;
+                                    Image {
+                                        source: @image-url("icons/down.svg");
+                                        width: 16px;
+                                        height: 16px;
+                                        colorize: Theme.text-2;
+                                    }
+                                }
+                            }
+                            switch-touch := TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => {
+                                    root.switch-clicked();
+                                }
                             }
                         }
                         Rectangle {
@@ -458,6 +508,10 @@ export component LiveTvScreen inherits Rectangle {
                     Hint {
                         keys: ["Enter"];
                         label: "Watch";
+                    }
+                    Hint {
+                        keys: ["P"];
+                        label: "Provider";
                     }
                 }
             }

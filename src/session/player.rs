@@ -87,10 +87,7 @@ impl Session {
         };
         let len = {
             let state = self.state.borrow();
-            state
-                .catalog
-                .as_ref()
-                .map_or(0, |c| c.group_len(state.group))
+            state.catalog.group_len(state.group)
         };
         if len == 0 {
             return;
