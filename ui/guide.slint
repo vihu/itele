@@ -1,0 +1,419 @@
+// The TV guide: the playing video and the selected programme on top, then
+// a grid of programmes per channel with a time ruler and a now line.
+// Layout: .ai-docs/mockups/03-guide.html.
+
+import { ListView } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { Button, ButtonKind, ChannelLogo, Hint, LiveMarker } from "atoms.slint";
+import { GuideCell, GuideDetails, GuideRow, GuideTick } from "models.slint";
+import { Rail } from "rail.slint";
+
+export { GuideCell, GuideDetails, GuideRow, GuideTick }
+
+component Arrow inherits Rectangle {
+    in property <image> icon;
+    callback clicked();
+    width: 32px;
+    height: 32px;
+    border-radius: Theme.radius-sm;
+    background: touch.has-hover ? Theme.surface-2 : transparent;
+    Image {
+        source: root.icon;
+        width: 18px;
+        height: 18px;
+        colorize: Theme.text-2;
+    }
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+component Cell inherits Rectangle {
+    in property <GuideCell> cell;
+    in property <length> per-minute;
+    callback clicked();
+    x: cell.x * per-minute;
+    y: 6px;
+    width: max(0px, cell.width * per-minute - 4px);
+    border-radius: 8px;
+    clip: true;
+    background: cell.selected ? Theme.surface-3 : cell.state == 0 ? transparent : cell.state == 1 ? Theme.surface-2 : Theme.surface-1;
+    border-width: cell.selected ? 2px : cell.state == 0 ? 1px : 0px;
+    border-color: cell.selected ? Theme.accent : Theme.line;
+    VerticalLayout {
+        padding-left: 12px;
+        padding-right: 8px;
+        alignment: center;
+        spacing: 1px;
+        HorizontalLayout {
+            spacing: 6px;
+            if root.cell.replay: VerticalLayout {
+                alignment: center;
+                Image {
+                    source: @image-url("icons/catchup.svg");
+                    width: 14px;
+                    height: 14px;
+                    colorize: Theme.text-3;
+                }
+            }
+            Text {
+                text: root.cell.title;
+                color: root.cell.state == 0 && !root.cell.selected ? Theme.text-2 : Theme.text;
+                font-size: Theme.fs-sm;
+                font-weight: root.cell.state == 0 ? 500 : 600;
+                overflow: elide;
+                horizontal-stretch: 1;
+            }
+        }
+        Text {
+            text: root.cell.time;
+            color: Theme.text-3;
+            font-size: Theme.fs-xs;
+            overflow: elide;
+        }
+    }
+    TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+export component GuideScreen inherits Rectangle {
+    in property <[GuideRow]> rows;
+    in property <int> row-index;
+    in property <[GuideTick]> ticks;
+    // Minutes from the window start to now; below 0 hides the now line.
+    in property <float> now-x;
+    in property <string> day;
+    in property <GuideDetails> details;
+    in property <image> frame;
+    in property <string> video-note;
+    in property <string> avatar;
+    out property <length> video-width: video.width;
+    out property <length> video-height: video.height;
+    // Width of the programme track, so the Rust side knows how many minutes
+    // fit.
+    out property <length> track-width: root.width - 76px - root.channel-column;
+    callback rows-visible(int, int);
+    callback cell-clicked(int, int);
+    callback watch();
+    callback replay();
+    callback earlier();
+    callback later();
+    callback navigate(int);
+    callback settings-clicked();
+
+    property <length> per-minute: 6px;
+    property <length> channel-column: 236px;
+    property <length> row-height: 64px;
+    property <int> first-visible: floor(-grid.content-y / root.row-height);
+    changed first-visible => {
+        root.rows-visible(root.first-visible, ceil(grid.visible-height / root.row-height) + 1);
+    }
+
+    // Scrolls the grid so row `index` is visible.
+    public function reveal(index: int) {
+        if (index * root.row-height < -grid.content-y) {
+            grid.content-y = -index * root.row-height;
+        } else if ((index + 1) * root.row-height > -grid.content-y + grid.visible-height) {
+            grid.content-y = -((index + 1) * root.row-height - grid.visible-height);
+        }
+    }
+
+    background: Theme.bg;
+    HorizontalLayout {
+        Rail {
+            avatar: root.avatar;
+            active: 2;
+            navigate(i) => {
+                root.navigate(i);
+            }
+            settings-clicked => {
+                root.settings-clicked();
+            }
+        }
+        VerticalLayout {
+            // Video and the selected programme.
+            Rectangle {
+                height: 290px;
+                background: Theme.surface-1;
+                HorizontalLayout {
+                    padding: 24px;
+                    padding-left: 32px;
+                    spacing: 32px;
+                    video := Rectangle {
+                        width: 408px;
+                        border-radius: Theme.radius-md;
+                        clip: true;
+                        background: #000;
+                        Image {
+                            width: 100%;
+                            height: 100%;
+                            source: root.frame;
+                            image-fit: fill;
+                        }
+                        if root.video-note != "": Text {
+                            text: root.video-note;
+                            color: Theme.text-2;
+                            font-size: Theme.fs-sm;
+                            font-weight: 600;
+                        }
+                    }
+                    VerticalLayout {
+                        spacing: 8px;
+                        alignment: start;
+                        Text {
+                            text: root.details.title;
+                            color: Theme.text;
+                            font-size: Theme.fs-3xl;
+                            font-weight: 800;
+                            overflow: elide;
+                        }
+                        HorizontalLayout {
+                            spacing: 10px;
+                            alignment: start;
+                            Text {
+                                text: root.details.channel + (root.details.time == "" ? "" : "  ·  " + root.details.time);
+                                color: Theme.text-2;
+                                font-size: Theme.fs-md;
+                                font-weight: 500;
+                            }
+                            if root.details.live: VerticalLayout {
+                                alignment: center;
+                                LiveMarker { }
+                            }
+                            Text {
+                                text: root.details.when;
+                                color: root.details.live ? Theme.text-2 : Theme.accent;
+                                font-size: Theme.fs-md;
+                                font-weight: 600;
+                            }
+                        }
+                        Text {
+                            text: root.details.description;
+                            color: Theme.text-2;
+                            font-size: Theme.fs-md;
+                            wrap: word-wrap;
+                            overflow: elide;
+                            max-height: 66px;
+                        }
+                        HorizontalLayout {
+                            padding-top: 10px;
+                            spacing: 10px;
+                            alignment: start;
+                            if root.details.live: Button {
+                                kind: ButtonKind.primary;
+                                text: "Watch";
+                                hint: "Enter";
+                                icon: @image-url("icons/play.svg");
+                                has-icon: true;
+                                clicked => {
+                                    root.watch();
+                                }
+                            }
+                            if root.details.replay: Button {
+                                kind: ButtonKind.primary;
+                                text: "Play from the start";
+                                hint: "Enter";
+                                icon: @image-url("icons/catchup.svg");
+                                has-icon: true;
+                                clicked => {
+                                    root.replay();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Ruler.
+            Rectangle {
+                height: 48px;
+                Rectangle {
+                    y: parent.height - 1px;
+                    height: 1px;
+                    background: Theme.line;
+                }
+                HorizontalLayout {
+                    width: root.channel-column;
+                    x: 0;
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    spacing: 4px;
+                    VerticalLayout {
+                        alignment: center;
+                        Arrow {
+                            icon: @image-url("icons/left.svg");
+                            clicked => {
+                                root.earlier();
+                            }
+                        }
+                    }
+                    Text {
+                        text: root.day;
+                        color: Theme.text;
+                        font-size: Theme.fs-md;
+                        font-weight: 600;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                        horizontal-stretch: 1;
+                        overflow: elide;
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        Arrow {
+                            icon: @image-url("icons/right.svg");
+                            clicked => {
+                                root.later();
+                            }
+                        }
+                    }
+                }
+                Rectangle {
+                    x: root.channel-column;
+                    width: parent.width - root.channel-column;
+                    clip: true;
+                    for tick in root.ticks: Rectangle {
+                        x: tick.x * root.per-minute;
+                        width: 1px;
+                        background: Theme.line;
+                        Text {
+                            x: 10px;
+                            text: tick.label;
+                            color: Theme.text-3;
+                            font-size: Theme.fs-sm;
+                            font-weight: 600;
+                        }
+                    }
+                    if root.now-x >= 0: Rectangle {
+                        x: root.now-x * root.per-minute - self.width / 2;
+                        y: (parent.height - self.height) / 2;
+                        width: 44px;
+                        height: 22px;
+                        border-radius: 5px;
+                        background: Theme.accent;
+                        Text {
+                            text: "Now";
+                            color: Theme.accent-ink;
+                            font-size: Theme.fs-xs;
+                            font-weight: 700;
+                        }
+                    }
+                }
+            }
+
+            // Grid.
+            Rectangle {
+                vertical-stretch: 1;
+                grid := ListView {
+                    for row[r] in root.rows: Rectangle {
+                        height: root.row-height;
+                        Rectangle {
+                            y: parent.height - 1px;
+                            height: 1px;
+                            background: Theme.line;
+                        }
+                        HorizontalLayout {
+                            Rectangle {
+                                width: root.channel-column;
+                                background: r == root.row-index ? Theme.surface-1 : Theme.bg;
+                                HorizontalLayout {
+                                    padding-left: 20px;
+                                    padding-right: 12px;
+                                    spacing: 12px;
+                                    Text {
+                                        width: 28px;
+                                        text: row.number;
+                                        color: r == root.row-index ? Theme.accent : Theme.text-3;
+                                        font-size: Theme.fs-sm;
+                                        font-weight: 600;
+                                        vertical-alignment: center;
+                                    }
+                                    VerticalLayout {
+                                        alignment: center;
+                                        ChannelLogo {
+                                            short: row.short;
+                                            tint: row.tint;
+                                            logo: row.logo;
+                                            has-logo: row.has-logo;
+                                        }
+                                    }
+                                    Text {
+                                        text: row.name;
+                                        color: Theme.text;
+                                        font-size: Theme.fs-sm;
+                                        font-weight: 600;
+                                        vertical-alignment: center;
+                                        overflow: elide;
+                                        horizontal-stretch: 1;
+                                    }
+                                }
+                            }
+                            Rectangle {
+                                clip: true;
+                                for cell[c] in row.cells: Cell {
+                                    height: root.row-height - 12px;
+                                    cell: cell;
+                                    per-minute: root.per-minute;
+                                    clicked => {
+                                        root.cell-clicked(r, c);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if root.now-x >= 0: Rectangle {
+                    x: root.channel-column + root.now-x * root.per-minute - 1px;
+                    width: 2px;
+                    background: Theme.accent;
+                }
+                if root.rows.length == 0: Text {
+                    text: "No channels in this group.";
+                    color: Theme.text-3;
+                    font-size: Theme.fs-md;
+                }
+            }
+
+            // Shortcut hints.
+            Rectangle {
+                height: 44px;
+                Rectangle {
+                    y: 0;
+                    height: 1px;
+                    background: Theme.line;
+                }
+                HorizontalLayout {
+                    padding-left: 24px;
+                    spacing: 22px;
+                    alignment: start;
+                    Hint {
+                        keys: ["↑", "↓", "←", "→"];
+                        label: "Move";
+                    }
+                    Hint {
+                        keys: ["Enter"];
+                        label: "Watch";
+                    }
+                    Hint {
+                        keys: ["PgUp", "PgDn"];
+                        label: "Page";
+                    }
+                    Hint {
+                        keys: ["N"];
+                        label: "Now";
+                    }
+                    Hint {
+                        keys: ["Esc"];
+                        label: "Live TV";
+                    }
+                }
+            }
+        }
+    }
+}

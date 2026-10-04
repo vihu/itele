@@ -7,9 +7,11 @@
 //! is ever logged or shown.
 
 mod browse;
+mod grid;
 mod guide;
 mod player;
 mod providers;
+mod timefmt;
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -72,8 +74,11 @@ struct State {
     row_provider: String,
     /// Each row's XMLTV channel id, lowercased; empty without one.
     row_guide_ids: Vec<String>,
+    /// Whether each row keeps catch-up.
+    row_archive: Vec<bool>,
     /// Rows the channel list last reported on screen.
     visible: std::ops::Range<usize>,
+    grid: grid::Grid,
     playing: Option<Playing>,
     /// Source of [`Slot::epoch`] values.
     next_epoch: u64,
@@ -148,6 +153,14 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
             playback::change_volume(&s.engine, f64::from(sign.signum()) * VOLUME_STEP);
         });
     });
+    app.on_navigate(|i| with_session(|s| s.navigate(i)));
+    app.on_guide_rows_visible(|first, count| with_session(|s| s.grid_rows_visible(first, count)));
+    app.on_guide_move(|dx, dy| with_session(|s| s.grid_move(dx, dy)));
+    app.on_guide_page(|direction| with_session(|s| s.grid_page(direction)));
+    app.on_guide_now(|| with_session(|s| s.grid_now()));
+    app.on_guide_shift(|direction| with_session(|s| s.grid_shift(direction)));
+    app.on_guide_cell_clicked(|row, cell| with_session(|s| s.grid_cell_clicked(row, cell)));
+    app.on_guide_enter(|| with_session(|s| s.grid_enter()));
     app.on_cycle_audio(|| with_session(|s| playback::next_audio(&s.engine)));
     app.on_cycle_subtitles(|| with_session(|s| playback::next_subtitles(&s.engine)));
 

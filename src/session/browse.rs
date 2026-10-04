@@ -22,6 +22,7 @@ impl Session {
         app.set_group_title(state.catalog.group_name(group).into());
         let row_logos = state.catalog.row_logos(group);
         let (row_provider, row_guide_ids) = state.catalog.row_guide_ids(group);
+        let row_archive = state.catalog.row_archive(group);
         let mut items = state.catalog.channel_items(group);
         {
             let logos = self.logos.borrow();
@@ -44,6 +45,7 @@ impl Session {
         state.row_logos = row_logos;
         state.row_provider = row_provider;
         state.row_guide_ids = row_guide_ids;
+        state.row_archive = row_archive;
         state.visible = 0..0;
         drop(state);
         self.refresh_programme();
@@ -80,18 +82,26 @@ impl Session {
     }
 
     fn show_logo(&self, url: &str, image: Image) {
-        let state = self.state.borrow();
-        for (row, _) in state
-            .row_logos
-            .iter()
-            .enumerate()
-            .filter(|(_, u)| *u == url)
-        {
-            if let Some(mut item) = state.channels.row_data(row) {
-                item.logo = image.clone();
-                item.has_logo = true;
-                state.channels.set_row_data(row, item);
+        let rows: Vec<usize> = {
+            let state = self.state.borrow();
+            let rows: Vec<usize> = state
+                .row_logos
+                .iter()
+                .enumerate()
+                .filter(|(_, u)| *u == url)
+                .map(|(row, _)| row)
+                .collect();
+            for &row in &rows {
+                if let Some(mut item) = state.channels.row_data(row) {
+                    item.logo = image.clone();
+                    item.has_logo = true;
+                    state.channels.set_row_data(row, item);
+                }
             }
+            rows
+        };
+        for row in rows {
+            self.show_grid_logo(row, &image);
         }
     }
 

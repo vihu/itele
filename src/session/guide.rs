@@ -12,6 +12,7 @@ use itele::xtream::Client;
 use slint::{Model, ModelRc, SharedString, VecModel};
 
 use super::Session;
+use super::timefmt::{clock, minutes_left, now};
 use crate::live::thousands;
 use crate::ui::{ProgrammeInfo, UpcomingItem};
 
@@ -169,49 +170,15 @@ impl Session {
     }
 }
 
-fn now() -> i64 {
-    jiff::Timestamp::now().as_second()
-}
-
 /// How far into `programme` `now` is, 0 to 1.
 fn progress(programme: &Programme, now: i64) -> f32 {
     let length = (programme.stop - programme.start).max(1) as f32;
     ((now - programme.start) as f32 / length).clamp(0.0, 1.0)
 }
 
-/// Unix seconds as local `21:00`.
-pub(super) fn clock(at: i64) -> String {
-    jiff::Timestamp::from_second(at).map_or_else(
-        |_| String::new(),
-        |t| {
-            t.to_zoned(jiff::tz::TimeZone::system())
-                .strftime("%H:%M")
-                .to_string()
-        },
-    )
-}
-
-/// `38 min left`, `1 h 12 min left`.
-fn minutes_left(seconds: i64) -> String {
-    let minutes = (seconds.max(0) + 59) / 60;
-    match (minutes / 60, minutes % 60) {
-        (0, m) => format!("{m} min left"),
-        (h, 0) => format!("{h} h left"),
-        (h, m) => format!("{h} h {m} min left"),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn minutes_left_rounds_up_and_uses_hours() {
-        assert_eq!(minutes_left(38 * 60 - 20), "38 min left");
-        assert_eq!(minutes_left(3600), "1 h left");
-        assert_eq!(minutes_left(72 * 60), "1 h 12 min left");
-        assert_eq!(minutes_left(-5), "0 min left");
-    }
 
     #[test]
     fn progress_is_clamped() {

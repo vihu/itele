@@ -39,3 +39,54 @@ export struct UpcomingItem {
     time: string,
     title: string,
 }
+
+// One programme in the guide grid, positioned in minutes from the window
+// start.
+export struct GuideCell {
+    title: string,
+    time: string,
+    x: float,
+    width: float,
+    // 0 ended, 1 on now, 2 upcoming.
+    state: int,
+    selected: bool,
+    // Replayable from the provider's catch-up.
+    replay: bool,
+}
+
+export struct GuideRow {
+    number: string,
+    name: string,
+    short: string,
+    tint: color,
+    logo: image,
+    has-logo: bool,
+    cells: [GuideCell],
+}
+
+// A ruler label, in minutes from the window start.
+export struct GuideTick {
+    x: float,
+    label: string,
+}
+
+// The selected programme in the guide.
+export struct GuideDetails {
+    title: string,
+    channel: string,
+    time: string,
+    // For example "Starts in 38 min" or "Ended 2 h ago".
+    when: string,
+    description: string,
+    // On now, so Enter watches the channel.
+    live: bool,
+    // Ended and replayable, so Enter plays it from the start.
+    replay: bool,
+}
+
+// A signed-in provider, for the switcher and the settings list.
+export struct ProviderItem {
+    name: string,
+    user: string,
+    status: string,
+}

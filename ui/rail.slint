@@ -26,7 +26,11 @@ component RailItem inherits Rectangle {
 
 export component Rail inherits Rectangle {
     in property <string> avatar;
+    // Index of the highlighted item: 0 home, 1 live TV, 2 guide, 3 movies,
+    // 4 series, 5 search.
+    in property <int> active: 1;
     callback settings-clicked();
+    callback navigate(int);
     width: 76px;
     background: Theme.surface-1;
     VerticalLayout {
@@ -49,18 +53,21 @@ export component Rail inherits Rectangle {
                 font-weight: 800;
             }
         }
-        for item in [
-            { icon: @image-url("icons/home.svg"), active: false },
-            { icon: @image-url("icons/tv.svg"), active: true },
-            { icon: @image-url("icons/guide.svg"), active: false },
-            { icon: @image-url("icons/film.svg"), active: false },
-            { icon: @image-url("icons/series.svg"), active: false },
-            { icon: @image-url("icons/search.svg"), active: false },
+        for icon[i] in [
+            @image-url("icons/home.svg"),
+            @image-url("icons/tv.svg"),
+            @image-url("icons/guide.svg"),
+            @image-url("icons/film.svg"),
+            @image-url("icons/series.svg"),
+            @image-url("icons/search.svg"),
         ]: HorizontalLayout {
             alignment: center;
             RailItem {
-                icon: item.icon;
-                active: item.active;
+                icon: icon;
+                active: i == root.active;
+                clicked => {
+                    root.navigate(i);
+                }
             }
         }
         Rectangle {

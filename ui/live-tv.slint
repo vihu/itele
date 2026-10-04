@@ -30,6 +30,7 @@ export component LiveTvScreen inherits Rectangle {
     callback watch();
     callback settings-clicked();
     callback switch-clicked();
+    callback navigate(int);
     // Rows `first` to `first + count` are on screen, for lazy logos.
     callback rows-visible(int, int);
 
@@ -53,8 +54,12 @@ export component LiveTvScreen inherits Rectangle {
     HorizontalLayout {
         Rail {
             avatar: root.avatar;
+            active: 1;
             settings-clicked => {
                 root.settings-clicked();
+            }
+            navigate(i) => {
+                root.navigate(i);
             }
         }
         VerticalLayout {

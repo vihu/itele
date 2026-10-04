@@ -176,6 +176,18 @@ impl Catalog {
         (source.id.clone(), ids)
     }
 
+    /// Whether each row in `group` keeps catch-up.
+    pub fn row_archive(&self, group: usize) -> Vec<bool> {
+        let Some(g) = self.groups.get(group) else {
+            return Vec::new();
+        };
+        let streams = &self.sources[g.source].library.streams;
+        g.channels
+            .iter()
+            .map(|&i| streams[i].archive_days > 0)
+            .collect()
+    }
+
     /// Each row's logo URL in `group`, empty when the provider has none.
     pub fn row_logos(&self, group: usize) -> Vec<String> {
         let Some(g) = self.groups.get(group) else {

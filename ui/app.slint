@@ -6,53 +6,14 @@ import { Button, ButtonKind } from "atoms.slint";
 import { LoginScreen } from "login.slint";
 import { ChannelItem, GroupItem, LiveTvScreen, ProgrammeInfo, UpcomingItem } from "live-tv.slint";
 import { InfoLine, InfoPair, PlayerScreen, PlayerState } from "player.slint";
+import { GuideCell, GuideDetails, GuideRow, GuideScreen, GuideTick } from "guide.slint";
+import { ProviderItem } from "models.slint";
+import { ProvidersPanel, SwitcherPanel } from "popups.slint";
 
-export { ChannelItem, GroupItem, InfoLine, InfoPair, PlayerState, ProgrammeInfo, UpcomingItem }
+export { ChannelItem, GroupItem, ProviderItem, GuideCell, GuideDetails, GuideRow, GuideTick, InfoLine, InfoPair, PlayerState, ProgrammeInfo, UpcomingItem }
 
-export enum Screen { login, live, player }
+export enum Screen { login, live, guide, player }
 
-// A signed-in provider, for the switcher and the settings list.
-export struct ProviderItem {
-    name: string,
-    user: string,
-    status: string,
-}
-
-// One choice in the provider switcher.
-component SwitchRow inherits Rectangle {
-    in property <string> title;
-    in property <string> detail;
-    in property <bool> selected;
-    callback clicked();
-    height: 52px;
-    border-radius: Theme.radius-sm;
-    background: selected ? Theme.accent-soft : touch.has-hover ? Theme.surface-3 : transparent;
-    VerticalLayout {
-        padding-left: 12px;
-        padding-right: 12px;
-        alignment: center;
-        spacing: 1px;
-        Text {
-            text: root.title;
-            color: root.selected ? Theme.accent : Theme.text;
-            font-size: Theme.fs-md;
-            font-weight: 600;
-            overflow: elide;
-        }
-        Text {
-            text: root.detail;
-            color: Theme.text-3;
-            font-size: Theme.fs-xs;
-            overflow: elide;
-        }
-    }
-    touch := TouchArea {
-        mouse-cursor: pointer;
-        clicked => {
-            root.clicked();
-        }
-    }
-}
 
 export component AppWindow inherits Window {
     in-out property <Screen> screen: Screen.login;
@@ -88,6 +49,29 @@ export component AppWindow inherits Window {
     callback channel-selected(int);
     callback rows-visible(int, int);
 
+    // Guide.
+    in property <[GuideRow]> guide-rows;
+    in property <int> guide-row;
+    in property <[GuideTick]> guide-ticks;
+    in property <float> guide-now-x: -1;
+    in property <string> guide-day;
+    in property <GuideDetails> guide-details;
+    out property <length> guide-track-width: guide.track-width;
+    callback navigate(int);
+    callback guide-move(int, int);
+    callback guide-page(int);
+    callback guide-now();
+    callback guide-enter();
+    callback guide-replay();
+    callback guide-shift(int);
+    callback guide-rows-visible(int, int);
+    callback guide-cell-clicked(int, int);
+
+    // Scrolls the guide grid to its selected row.
+    public function reveal-guide-row() {
+        guide.reveal(root.guide-row);
+    }
+
     // Playback.
     in property <image> frame;
     in property <string> video-note;
@@ -97,8 +81,8 @@ export component AppWindow inherits Window {
     in property <[UpcomingItem]> upcoming;
     in-out property <bool> info-visible;
     in property <[InfoLine]> info;
-    out property <length> video-width: screen == Screen.player ? root.width : live.video-width;
-    out property <length> video-height: screen == Screen.player ? root.height : live.video-height;
+    out property <length> video-width: screen == Screen.player ? root.width : screen == Screen.guide ? guide.video-width : live.video-width;
+    out property <length> video-height: screen == Screen.player ? root.height : screen == Screen.guide ? guide.video-height : live.video-height;
     callback watch();
     callback back();
     callback zap(int);
@@ -121,6 +105,8 @@ export component AppWindow inherits Window {
             login-screen.focus-first();
         } else if (root.screen == Screen.live) {
             live-keys.focus();
+        } else if (root.screen == Screen.guide) {
+            guide-keys.focus();
         } else {
             player-keys.focus();
         }
@@ -177,6 +163,8 @@ export component AppWindow inherits Window {
                 root.select-group(root.group-index + 1);
             } else if (event.text == Key.Return && root.channel-index >= 0) {
                 root.watch();
+            } else if (event.text.to-lowercase() == "g") {
+                root.navigate(2);
             } else if (event.text.to-lowercase() == "p" && root.providers.length > 1) {
                 root.view-selected(root.view-index + 1 >= root.providers.length ? -1 : root.view-index + 1);
             } else {
@@ -211,11 +199,79 @@ export component AppWindow inherits Window {
             settings-clicked => {
                 settings.show();
             }
+            navigate(i) => {
+                root.navigate(i);
+            }
             switch-clicked => {
                 switcher.show();
             }
             rows-visible(first, count) => {
                 root.rows-visible(first, count);
+            }
+        }
+    }
+
+    guide-keys := FocusScope {
+        visible: root.screen == Screen.guide;
+        key-pressed(event) => {
+            let key = event.text.to-lowercase();
+            if (event.text == Key.UpArrow) {
+                root.guide-move(0, -1);
+            } else if (event.text == Key.DownArrow) {
+                root.guide-move(0, 1);
+            } else if (event.text == Key.LeftArrow) {
+                root.guide-move(-1, 0);
+            } else if (event.text == Key.RightArrow) {
+                root.guide-move(1, 0);
+            } else if (event.text == Key.PageUp) {
+                root.guide-page(-1);
+            } else if (event.text == Key.PageDown) {
+                root.guide-page(1);
+            } else if (key == "n" || event.text == Key.Home) {
+                root.guide-now();
+            } else if (event.text == Key.Return) {
+                root.guide-enter();
+            } else if (event.text == Key.Escape || key == "g") {
+                root.navigate(1);
+            } else {
+                return reject;
+            }
+            accept
+        }
+        guide := GuideScreen {
+            rows: root.guide-rows;
+            row-index: root.guide-row;
+            ticks: root.guide-ticks;
+            now-x: root.guide-now-x;
+            day: root.guide-day;
+            details: root.guide-details;
+            frame: root.screen == Screen.guide ? root.frame : @image-url("");
+            video-note: root.video-note;
+            avatar: root.avatar;
+            rows-visible(first, count) => {
+                root.guide-rows-visible(first, count);
+            }
+            cell-clicked(row, cell) => {
+                root.guide-cell-clicked(row, cell);
+                guide-keys.focus();
+            }
+            watch => {
+                root.guide-enter();
+            }
+            replay => {
+                root.guide-replay();
+            }
+            earlier => {
+                root.guide-shift(-1);
+            }
+            later => {
+                root.guide-shift(1);
+            }
+            navigate(i) => {
+                root.navigate(i);
+            }
+            settings-clicked => {
+                settings.show();
             }
         }
     }
@@ -352,33 +408,12 @@ export component AppWindow inherits Window {
         y: 128px;
         width: 300px;
         close-policy: close-on-click-outside;
-        Rectangle {
-            background: Theme.surface-2;
-            border-radius: Theme.radius-md;
-            drop-shadow-blur: 28px;
-            drop-shadow-offset-y: 10px;
-            drop-shadow-color: #00000073;
-            VerticalLayout {
-                padding: 8px;
-                spacing: 2px;
-                SwitchRow {
-                    title: "All providers";
-                    detail: root.providers.length + " providers";
-                    selected: root.view-index == -1;
-                    clicked => {
-                        switcher.close();
-                        root.view-selected(-1);
-                    }
-                }
-                for provider[i] in root.providers: SwitchRow {
-                    title: provider.name;
-                    detail: provider.status;
-                    selected: root.view-index == i;
-                    clicked => {
-                        switcher.close();
-                        root.view-selected(i);
-                    }
-                }
+        SwitcherPanel {
+            providers: root.providers;
+            view-index: root.view-index;
+            selected(i) => {
+                switcher.close();
+                root.view-selected(i);
             }
         }
     }
@@ -389,71 +424,15 @@ export component AppWindow inherits Window {
         y: root.height - self.height - 16px;
         width: 360px;
         close-policy: close-on-click-outside;
-        Rectangle {
-            background: Theme.surface-2;
-            border-radius: Theme.radius-lg;
-            drop-shadow-blur: 28px;
-            drop-shadow-offset-y: 10px;
-            drop-shadow-color: #00000073;
-            VerticalLayout {
-                padding: 20px;
-                spacing: 14px;
-                Text {
-                    text: "Providers";
-                    color: Theme.text;
-                    font-size: Theme.fs-lg;
-                    font-weight: 700;
-                }
-                for provider[i] in root.providers: HorizontalLayout {
-                    spacing: 12px;
-                    VerticalLayout {
-                        horizontal-stretch: 1;
-                        spacing: 2px;
-                        Text {
-                            text: provider.name;
-                            color: Theme.text;
-                            font-size: Theme.fs-md;
-                            font-weight: 600;
-                            overflow: elide;
-                        }
-                        Text {
-                            text: provider.user;
-                            color: Theme.text-2;
-                            font-size: Theme.fs-sm;
-                            overflow: elide;
-                        }
-                        Text {
-                            text: provider.status;
-                            color: Theme.text-3;
-                            font-size: Theme.fs-sm;
-                            wrap: word-wrap;
-                        }
-                    }
-                    VerticalLayout {
-                        alignment: center;
-                        Button {
-                            kind: ButtonKind.ghost;
-                            text: "Sign out";
-                            clicked => {
-                                settings.close();
-                                root.sign-out(i);
-                            }
-                        }
-                    }
-                }
-                HorizontalLayout {
-                    alignment: start;
-                    Button {
-                        kind: ButtonKind.secondary;
-                        text: "Add provider";
-                        icon: @image-url("icons/plus.svg");
-                        has-icon: true;
-                        clicked => {
-                            settings.close();
-                            root.add-provider();
-                        }
-                    }
-                }
+        ProvidersPanel {
+            providers: root.providers;
+            sign-out(i) => {
+                settings.close();
+                root.sign-out(i);
+            }
+            add-provider => {
+                settings.close();
+                root.add-provider();
             }
         }
     }
