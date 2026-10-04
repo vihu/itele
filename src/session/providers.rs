@@ -321,10 +321,12 @@ impl Session {
             slot.credentials = Some(credentials);
         }
         // Screens without a preview keep it off until Live TV shows again.
-        let previewing = self
-            .app
-            .upgrade()
-            .is_some_and(|app| matches!(app.get_screen(), Screen::Live | Screen::Guide));
+        let previewing = self.app.upgrade().is_some_and(|app| {
+            matches!(
+                app.get_screen(),
+                Screen::Home | Screen::Live | Screen::Favorites | Screen::Guide
+            )
+        });
         if previewing && self.state.borrow().playing.is_none() {
             self.play_selected();
         }
