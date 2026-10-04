@@ -6,7 +6,7 @@ import { ListView } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { Button, ButtonKind, ChannelLogo, Hint, LiveMarker } from "atoms.slint";
 import { GuideCell, GuideDetails, GuideRow, GuideTick } from "models.slint";
-import { Rail } from "rail.slint";
+import { Sidebar } from "sidebar.slint";
 
 export { GuideCell, GuideDetails, GuideRow, GuideTick }
 
@@ -93,7 +93,6 @@ export component GuideScreen inherits Rectangle {
     in property <GuideDetails> details;
     in property <image> frame;
     in property <string> video-note;
-    in property <string> avatar;
     out property <length> video-width: video.width;
     out property <length> video-height: video.height;
     // Width of the programme track, so the Rust side knows how many minutes
@@ -106,7 +105,6 @@ export component GuideScreen inherits Rectangle {
     callback earlier();
     callback later();
     callback navigate(int);
-    callback settings-clicked();
     // Keyboard: move the selection by cells and rows, a page of rows, to
     // now, and Enter on the selected programme.
     callback move(int, int);
@@ -166,14 +164,10 @@ export component GuideScreen inherits Rectangle {
         }
     }
     HorizontalLayout {
-        Rail {
-            avatar: root.avatar;
+        Sidebar {
             active: 2;
             navigate(i) => {
                 root.navigate(i);
-            }
-            settings-clicked => {
-                root.settings-clicked();
             }
         }
         VerticalLayout {

@@ -2,11 +2,13 @@
 // the stream info overlay (`i`). Layout: .ai-docs/mockups/04-player.html
 // and the user's modernz reference (TASK-002).
 
-import { ListView } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { Button, ButtonKind, ChannelLogo, LiveMarker, Tag } from "atoms.slint";
 import { ChannelItem, ProgrammeInfo } from "models.slint";
 import { IconButton, Track } from "controls.slint";
+import { TrackItem, TrackMenu } from "track-menu.slint";
+
+export { TrackItem }
 
 export struct PlayerState {
     paused: bool,
@@ -25,16 +27,6 @@ export struct PlayerState {
     vod: bool,
     // In replay and VOD, for example "12:34 / 1:00:00".
     time: string,
-}
-
-// A row of the audio or subtitle menu.
-export struct TrackItem {
-    // mpv's track id; 0 is "Off" in the subtitle menu.
-    id: int,
-    name: string,
-    // For example "AC-3 · 5.1".
-    detail: string,
-    selected: bool,
 }
 
 // One "label: value" pair in the info overlay.
@@ -492,84 +484,20 @@ export component PlayerScreen inherits Rectangle {
         }
     }
 
-    // The audio or subtitle menu, above its button. A click elsewhere
-    // closes it.
-    if root.tracks-open: TouchArea {
-        clicked => {
+    // The audio or subtitle menu, above its button.
+    if root.tracks-open: TrackMenu {
+        tracks: root.tracks;
+        kind: root.tracks-kind;
+        index: root.tracks-index;
+        menu-x: root.tracks-kind == 0 ? 12px : 60px;
+        close => {
             root.tracks-open = false;
             root.show-banner();
         }
-    }
-    if root.tracks-open: Rectangle {
-        x: root.tracks-kind == 0 ? 12px : 60px;
-        y: root.height - 84px - self.height;
-        width: 340px;
-        height: menu.preferred-height;
-        border-radius: Theme.radius-md;
-        background: Theme.surface-2;
-        drop-shadow-blur: 28px;
-        drop-shadow-offset-y: 10px;
-        drop-shadow-color: #00000080;
-        menu := VerticalLayout {
-            padding: 8px;
-            spacing: 2px;
-            Text {
-                text: root.tracks-kind == 0 ? "Audio" : "Subtitles";
-                color: Theme.text-3;
-                font-size: Theme.fs-sm;
-                font-weight: 700;
-                height: 30px;
-                vertical-alignment: center;
-                x: 10px;
-            }
-            ListView {
-                height: min(root.tracks.length * 50px, 350px);
-                for track[i] in root.tracks: Rectangle {
-                    height: 50px;
-                    border-radius: Theme.radius-sm;
-                    background: i == root.tracks-index ? Theme.surface-4 : row.has-hover ? Theme.surface-3 : transparent;
-                    HorizontalLayout {
-                        padding-left: 10px;
-                        padding-right: 12px;
-                        spacing: 12px;
-                        VerticalLayout {
-                            alignment: center;
-                            width: 18px;
-                            if track.selected: Image {
-                                source: @image-url("icons/check.svg");
-                                width: 18px;
-                                height: 18px;
-                                colorize: Theme.accent;
-                            }
-                        }
-                        VerticalLayout {
-                            alignment: center;
-                            spacing: 1px;
-                            Text {
-                                text: track.name;
-                                color: track.selected ? Theme.accent : Theme.text;
-                                font-size: Theme.fs-md;
-                                font-weight: 600;
-                                overflow: elide;
-                            }
-                            if track.detail != "": Text {
-                                text: track.detail;
-                                color: Theme.text-3;
-                                font-size: Theme.fs-xs;
-                                overflow: elide;
-                            }
-                        }
-                    }
-                    row := TouchArea {
-                        mouse-cursor: pointer;
-                        clicked => {
-                            root.tracks-open = false;
-                            root.choose-track(root.tracks-kind, track.id);
-                            root.show-banner();
-                        }
-                    }
-                }
-            }
+        chosen(id) => {
+            root.tracks-open = false;
+            root.choose-track(root.tracks-kind, id);
+            root.show-banner();
         }
     }
 }

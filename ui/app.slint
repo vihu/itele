@@ -11,11 +11,12 @@ import { GuideCell, GuideDetails, GuideRow, GuideScreen, GuideTick } from "guide
 import { ProviderItem } from "models.slint";
 import { SearchItem, SearchScreen } from "search.slint";
 import { SwitcherPanel } from "popups.slint";
+import { Shell } from "sidebar.slint";
 import { Fact, GuideStatus, ProviderDetails, SettingKey, SettingValues, SettingsData, SettingsScreen } from "settings.slint";
 import { PosterItem, VodScreen } from "vod.slint";
 import { DetailsScreen, EpisodeItem, SeasonItem, TitleDetails } from "details.slint";
 
-export { ChannelItem, Fact, GroupItem, GuideStatus, SettingKey, SettingValues, SettingsData, ProviderItem, SearchItem, GuideCell, GuideDetails, GuideRow, GuideTick, EpisodeItem, InfoLine, InfoPair, PlayerState, PosterItem, ProgrammeInfo, ProviderDetails, SeasonItem, TitleDetails, TrackItem, UpcomingItem }
+export { Shell, ChannelItem, Fact, GroupItem, GuideStatus, SettingKey, SettingValues, SettingsData, ProviderItem, SearchItem, GuideCell, GuideDetails, GuideRow, GuideTick, EpisodeItem, InfoLine, InfoPair, PlayerState, PosterItem, ProgrammeInfo, ProviderDetails, SeasonItem, TitleDetails, TrackItem, UpcomingItem }
 
 export enum Screen { login, live, guide, search, movies, series, details, settings, player }
 
@@ -50,7 +51,6 @@ export component AppWindow inherits Window {
     in-out property <int> channel-index: -1;
     in property <string> group-title;
     in property <string> status;
-    in property <string> avatar;
     callback group-selected(int);
     callback channel-selected(int);
     callback rows-visible(int, int);
@@ -206,273 +206,263 @@ export component AppWindow inherits Window {
         }
     }
 
-    live := LiveTvScreen {
-        visible: root.screen == Screen.live;
-        groups: root.groups;
-        group-index: root.group-index;
-        channels: root.channels;
-        channel-index: root.channel-index;
-        group-title: root.group-title;
-        status: root.status;
-        avatar: root.avatar;
-        view-name: root.view-name;
-        frame: root.screen == Screen.live ? root.frame : @image-url("");
-        video-note: root.video-note;
-        programme: root.programme;
-        upcoming: root.upcoming;
-        group-selected(i) => {
-            root.group-selected(i);
+    // Ctrl+B anywhere: whatever a screen does not handle reaches here.
+    shell-keys := FocusScope {
+        key-pressed(event) => {
+            if (event.modifiers.control && event.text.to-lowercase() == "b") {
+                Shell.toggle-sidebar();
+                return accept;
+            }
+            reject
         }
-        channel-selected(i) => {
-            root.channel-selected(i);
-        }
-        watch => {
-            root.watch();
-        }
-        settings-clicked => {
-            root.navigate(6);
-        }
-        navigate(i) => {
-            root.navigate(i);
-        }
-        next-provider => {
-            root.next-provider();
-        }
-        switch-clicked => {
-            switcher.show();
-        }
-        rows-visible(first, count) => {
-            root.rows-visible(first, count);
-        }
-    }
 
-    guide := GuideScreen {
-        visible: root.screen == Screen.guide;
-        rows: root.guide-rows;
-        row-index: root.guide-row;
-        ticks: root.guide-ticks;
-        now-x: root.guide-now-x;
-        day: root.guide-day;
-        details: root.guide-details;
-        frame: root.screen == Screen.guide ? root.frame : @image-url("");
-        video-note: root.video-note;
-        avatar: root.avatar;
-        rows-visible(first, count) => {
-            root.guide-rows-visible(first, count);
+        live := LiveTvScreen {
+            visible: root.screen == Screen.live;
+            groups: root.groups;
+            group-index: root.group-index;
+            channels: root.channels;
+            channel-index: root.channel-index;
+            group-title: root.group-title;
+            status: root.status;
+            view-name: root.view-name;
+            frame: root.screen == Screen.live ? root.frame : @image-url("");
+            video-note: root.video-note;
+            programme: root.programme;
+            upcoming: root.upcoming;
+            group-selected(i) => {
+                root.group-selected(i);
+            }
+            channel-selected(i) => {
+                root.channel-selected(i);
+            }
+            watch => {
+                root.watch();
+            }
+            navigate(i) => {
+                root.navigate(i);
+            }
+            next-provider => {
+                root.next-provider();
+            }
+            switch-clicked => {
+                switcher.show();
+            }
+            rows-visible(first, count) => {
+                root.rows-visible(first, count);
+            }
         }
-        cell-clicked(row, cell) => {
-            root.guide-cell-clicked(row, cell);
-            guide.focus-keys();
-        }
-        move(dx, dy) => {
-            root.guide-move(dx, dy);
-        }
-        page(direction) => {
-            root.guide-page(direction);
-        }
-        now => {
-            root.guide-now();
-        }
-        enter => {
-            root.guide-enter();
-        }
-        watch => {
-            root.guide-enter();
-        }
-        replay => {
-            root.guide-replay();
-        }
-        earlier => {
-            root.guide-shift(-1);
-        }
-        later => {
-            root.guide-shift(1);
-        }
-        navigate(i) => {
-            root.navigate(i);
-        }
-        settings-clicked => {
-            root.navigate(6);
-        }
-    }
 
-    search := SearchScreen {
-        visible: root.screen == Screen.search;
-        query <=> root.search-query;
-        items: root.search-items;
-        index: root.search-index;
-        note: root.search-note;
-        avatar: root.avatar;
-        edited(text) => {
-            root.search-edited(text);
+        guide := GuideScreen {
+            visible: root.screen == Screen.guide;
+            rows: root.guide-rows;
+            row-index: root.guide-row;
+            ticks: root.guide-ticks;
+            now-x: root.guide-now-x;
+            day: root.guide-day;
+            details: root.guide-details;
+            frame: root.screen == Screen.guide ? root.frame : @image-url("");
+            video-note: root.video-note;
+            rows-visible(first, count) => {
+                root.guide-rows-visible(first, count);
+            }
+            cell-clicked(row, cell) => {
+                root.guide-cell-clicked(row, cell);
+                guide.focus-keys();
+            }
+            move(dx, dy) => {
+                root.guide-move(dx, dy);
+            }
+            page(direction) => {
+                root.guide-page(direction);
+            }
+            now => {
+                root.guide-now();
+            }
+            enter => {
+                root.guide-enter();
+            }
+            watch => {
+                root.guide-enter();
+            }
+            replay => {
+                root.guide-replay();
+            }
+            earlier => {
+                root.guide-shift(-1);
+            }
+            later => {
+                root.guide-shift(1);
+            }
+            navigate(i) => {
+                root.navigate(i);
+            }
         }
-        picked(i) => {
-            root.search-picked(i);
-        }
-        move(delta) => {
-            root.search-move(delta);
-        }
-        navigate(i) => {
-            root.navigate(i);
-        }
-        settings-clicked => {
-            root.navigate(6);
-        }
-    }
 
-    vod := VodScreen {
-        visible: root.screen == Screen.movies || root.screen == Screen.series;
-        title: root.screen == Screen.series ? "Series" : "Movies";
-        rail-active: root.screen == Screen.series ? 4 : 3;
-        status: root.vod-status;
-        avatar: root.avatar;
-        view-name: root.view-name;
-        groups: root.vod-groups;
-        group-index: root.vod-group-index;
-        group-title: root.vod-group-title;
-        items: root.vod-items;
-        index <=> root.vod-index;
-        note: root.vod-note;
-        focus-groups <=> root.vod-focus-groups;
-        group-selected(i) => {
-            root.vod-group-selected(i);
+        search := SearchScreen {
+            visible: root.screen == Screen.search;
+            query <=> root.search-query;
+            items: root.search-items;
+            index: root.search-index;
+            note: root.search-note;
+            edited(text) => {
+                root.search-edited(text);
+            }
+            picked(i) => {
+                root.search-picked(i);
+            }
+            move(delta) => {
+                root.search-move(delta);
+            }
+            navigate(i) => {
+                root.navigate(i);
+            }
         }
-        open(i) => {
-            root.vod-open(i);
-        }
-        items-visible(first, count) => {
-            root.vod-items-visible(first, count);
-        }
-        navigate(i) => {
-            root.navigate(i);
-        }
-        next-provider => {
-            root.next-provider();
-        }
-        settings-clicked => {
-            root.navigate(6);
-        }
-        switch-clicked => {
-            switcher.show();
-        }
-    }
 
-    details-screen := DetailsScreen {
-        visible: root.screen == Screen.details;
-        details: root.details;
-        avatar: root.avatar;
-        rail-active: root.details-rail;
-        series: root.details-series;
-        seasons: root.details-seasons;
-        season-index: root.details-season-index;
-        episodes: root.details-episodes;
-        episode-index <=> root.details-episode-index;
-        play => {
-            root.details-play();
+        vod := VodScreen {
+            visible: root.screen == Screen.movies || root.screen == Screen.series;
+            title: root.screen == Screen.series ? "Series" : "Movies";
+            rail-active: root.screen == Screen.series ? 4 : 3;
+            status: root.vod-status;
+            view-name: root.view-name;
+            groups: root.vod-groups;
+            group-index: root.vod-group-index;
+            group-title: root.vod-group-title;
+            items: root.vod-items;
+            index <=> root.vod-index;
+            note: root.vod-note;
+            focus-groups <=> root.vod-focus-groups;
+            group-selected(i) => {
+                root.vod-group-selected(i);
+            }
+            open(i) => {
+                root.vod-open(i);
+            }
+            items-visible(first, count) => {
+                root.vod-items-visible(first, count);
+            }
+            navigate(i) => {
+                root.navigate(i);
+            }
+            next-provider => {
+                root.next-provider();
+            }
+            switch-clicked => {
+                switcher.show();
+            }
         }
-        restart => {
-            root.details-restart();
-        }
-        season-selected(i) => {
-            root.details-season-selected(i);
-        }
-        back => {
-            root.details-back();
-        }
-        navigate(i) => {
-            root.navigate(i);
-        }
-        settings-clicked => {
-            root.navigate(6);
-        }
-    }
 
-    settings-screen := SettingsScreen {
-        visible: root.screen == Screen.settings;
-        avatar: root.avatar;
-        sign-out(i) => {
-            root.sign-out(i);
+        details-screen := DetailsScreen {
+            visible: root.screen == Screen.details;
+            details: root.details;
+            rail-active: root.details-rail;
+            series: root.details-series;
+            seasons: root.details-seasons;
+            season-index: root.details-season-index;
+            episodes: root.details-episodes;
+            episode-index <=> root.details-episode-index;
+            play => {
+                root.details-play();
+            }
+            restart => {
+                root.details-restart();
+            }
+            season-selected(i) => {
+                root.details-season-selected(i);
+            }
+            back => {
+                root.details-back();
+            }
+            navigate(i) => {
+                root.navigate(i);
+            }
         }
-        add-provider => {
-            root.add-provider();
-        }
-        navigate(i) => {
-            root.navigate(i);
-        }
-    }
 
-    player-screen := PlayerScreen {
-        visible: root.screen == Screen.player;
-        back-label: root.player-back;
-        frame: root.screen == Screen.player ? root.frame : @image-url("");
-        channel: root.current;
-        programme: root.programme;
-        state: root.player;
-        video-note: root.video-note;
-        banner-visible: root.banner-visible;
-        info-visible <=> root.info-visible;
-        info: root.info;
-        back => {
-            root.back();
+        settings-screen := SettingsScreen {
+            visible: root.screen == Screen.settings;
+            sign-out(i) => {
+                root.sign-out(i);
+            }
+            add-provider => {
+                root.add-provider();
+            }
+            navigate(i) => {
+                root.navigate(i);
+            }
         }
-        escape => {
-            root.escape();
-        }
-        zap(delta) => {
-            root.zap(delta);
-        }
-        show-banner => {
-            root.show-banner();
-        }
-        toggle-pause => {
-            root.toggle-pause();
-        }
-        seek(seconds) => {
-            root.seek(seconds);
-        }
-        seek-to(fraction) => {
-            root.seek-to(fraction);
-        }
-        set-volume(percent) => {
-            root.set-volume(percent);
-        }
-        change-volume(delta) => {
-            root.change-volume(delta);
-        }
-        go-live => {
-            root.go-live();
-        }
-        toggle-mute => {
-            root.toggle-mute();
-        }
-        tracks: root.track-items;
-        tracks-kind: root.tracks-kind;
-        tracks-open <=> root.tracks-open;
-        tracks-index <=> root.tracks-index;
-        open-tracks(kind) => {
-            root.open-tracks(kind);
-        }
-        choose-track(kind, id) => {
-            root.choose-track(kind, id);
-        }
-        toggle-fullscreen => {
-            root.toggle-fullscreen();
-        }
-    }
 
-    login-screen := LoginScreen {
-        visible: root.screen == Screen.login;
-        server <=> root.login-server;
-        username <=> root.login-username;
-        password <=> root.login-password;
-        error: root.login-error;
-        busy: root.login-busy;
-        can-cancel: root.login-can-cancel;
-        submit => {
-            root.login();
+        player-screen := PlayerScreen {
+            visible: root.screen == Screen.player;
+            back-label: root.player-back;
+            frame: root.screen == Screen.player ? root.frame : @image-url("");
+            channel: root.current;
+            programme: root.programme;
+            state: root.player;
+            video-note: root.video-note;
+            banner-visible: root.banner-visible;
+            info-visible <=> root.info-visible;
+            info: root.info;
+            back => {
+                root.back();
+            }
+            escape => {
+                root.escape();
+            }
+            zap(delta) => {
+                root.zap(delta);
+            }
+            show-banner => {
+                root.show-banner();
+            }
+            toggle-pause => {
+                root.toggle-pause();
+            }
+            seek(seconds) => {
+                root.seek(seconds);
+            }
+            seek-to(fraction) => {
+                root.seek-to(fraction);
+            }
+            set-volume(percent) => {
+                root.set-volume(percent);
+            }
+            change-volume(delta) => {
+                root.change-volume(delta);
+            }
+            go-live => {
+                root.go-live();
+            }
+            toggle-mute => {
+                root.toggle-mute();
+            }
+            tracks: root.track-items;
+            tracks-kind: root.tracks-kind;
+            tracks-open <=> root.tracks-open;
+            tracks-index <=> root.tracks-index;
+            open-tracks(kind) => {
+                root.open-tracks(kind);
+            }
+            choose-track(kind, id) => {
+                root.choose-track(kind, id);
+            }
+            toggle-fullscreen => {
+                root.toggle-fullscreen();
+            }
         }
-        cancel => {
-            root.cancel-login();
+
+        login-screen := LoginScreen {
+            visible: root.screen == Screen.login;
+            server <=> root.login-server;
+            username <=> root.login-username;
+            password <=> root.login-password;
+            error: root.login-error;
+            busy: root.login-busy;
+            can-cancel: root.login-can-cancel;
+            submit => {
+                root.login();
+            }
+            cancel => {
+                root.cancel-login();
+            }
         }
     }
 

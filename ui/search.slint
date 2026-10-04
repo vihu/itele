@@ -4,7 +4,7 @@ import { ListView } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { ChannelLogo, Hint, LiveMarker } from "atoms.slint";
 import { SearchItem } from "models.slint";
-import { Rail } from "rail.slint";
+import { Sidebar } from "sidebar.slint";
 
 export { SearchItem }
 
@@ -113,12 +113,10 @@ export component SearchScreen inherits Rectangle {
     in-out property <string> query;
     in property <[SearchItem]> items;
     in property <int> index;
-    in property <string> avatar;
     in property <string> note;
     callback edited(string);
     callback picked(int);
     callback navigate(int);
-    callback settings-clicked();
     // Up and Down move through the results.
     callback move(int);
 
@@ -157,14 +155,10 @@ export component SearchScreen inherits Rectangle {
             accept
         }
         HorizontalLayout {
-            Rail {
-                avatar: root.avatar;
+            Sidebar {
                 active: 5;
                 navigate(i) => {
                     root.navigate(i);
-                }
-                settings-clicked => {
-                    root.settings-clicked();
                 }
             }
             VerticalLayout {

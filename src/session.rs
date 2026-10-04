@@ -30,7 +30,7 @@ use std::time::{Duration, Instant};
 use itele::epg::{Programme, Store};
 use itele::history::{Entry, History};
 use itele::provider::{Library, Paths, Provider};
-use itele::settings::Settings;
+use itele::settings::{Settings, Sidebar};
 use itele::xtream::{Credentials, LiveStream, Movie, Show};
 use mpv_engine::{EndReason, Engine, PlaybackEvent};
 use slint::{ComponentHandle, SharedString, Timer, TimerMode, VecModel};
@@ -41,7 +41,7 @@ use crate::logos::Logos;
 use crate::names::thousands;
 use crate::playback::{self, SEEK_STEP, VOLUME_STEP};
 use crate::tracks;
-use crate::ui::{AppWindow, ChannelItem, Screen, SettingsData};
+use crate::ui::{AppWindow, ChannelItem, Screen, SettingsData, Shell};
 
 /// Delay before the preview follows the selection, so holding Down does
 /// not open a stream per row.
@@ -257,6 +257,9 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
     app.on_details_restart(|| with_session(|s| s.details_play(Start::Beginning)));
     app.on_details_back(|| with_session(|s| s.details_back()));
     app.on_details_season_selected(|i| with_session(|s| s.details_season_selected(i)));
+    let shell = app.global::<Shell>();
+    shell.set_sidebar_expanded(session.settings.borrow().sidebar == Sidebar::Expanded);
+    shell.on_toggle_sidebar(|| with_session(|s| s.toggle_sidebar()));
     let settings = app.global::<SettingsData>();
     settings.set_version(env!("CARGO_PKG_VERSION").into());
     settings.on_rename(|i, name| with_session(|s| s.rename_provider(i, &name)));

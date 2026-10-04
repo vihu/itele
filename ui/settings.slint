@@ -5,7 +5,7 @@ import { ScrollView } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { Button, ButtonKind, Hint } from "atoms.slint";
 import { Fact, GuideStatus, ProviderDetails, SettingKey, SettingValues } from "models.slint";
-import { Rail } from "rail.slint";
+import { Sidebar } from "sidebar.slint";
 import { SectionItem, Segmented, SettingRow, Stepper } from "settings-controls.slint";
 import { ProviderBlock } from "settings-providers.slint";
 
@@ -122,7 +122,6 @@ export global SettingsData {
 }
 
 export component SettingsScreen inherits Rectangle {
-    in property <string> avatar;
     // The section showing: 0 providers, 1 guide.
     in-out property <int> section;
     callback sign-out(int);
@@ -156,14 +155,10 @@ export component SettingsScreen inherits Rectangle {
         }
 
         HorizontalLayout {
-            Rail {
-                avatar: root.avatar;
+            Sidebar {
                 active: 6;
                 navigate(i) => {
                     root.navigate(i);
-                }
-                settings-clicked => {
-                    root.focus-keys();
                 }
             }
             VerticalLayout {

@@ -2,7 +2,7 @@
 //! refresh settings, and saving changes.
 
 use itele::provider::Provider;
-use itele::settings::Refresh;
+use itele::settings::{Refresh, Sidebar};
 use itele::xtream::Action;
 use slint::{ComponentHandle, ModelRc, VecModel};
 
@@ -11,7 +11,7 @@ use super::timefmt::{ago, now};
 use super::{Session, Slot, State, expiry};
 use crate::names::thousands;
 use crate::ui::{
-    Fact, GuideStatus, ProviderDetails, Screen, SettingKey, SettingValues, SettingsData,
+    Fact, GuideStatus, ProviderDetails, Screen, SettingKey, SettingValues, SettingsData, Shell,
 };
 use crate::vod::Shelves;
 
@@ -88,6 +88,25 @@ impl Session {
             }
         }
         self.push_settings();
+    }
+
+    /// Expands or collapses the sidebar, and remembers it.
+    pub(super) fn toggle_sidebar(&self) {
+        let Some(app) = self.app.upgrade() else {
+            return;
+        };
+        let expanded = {
+            let mut settings = self.settings.borrow_mut();
+            settings.sidebar = match settings.sidebar {
+                Sidebar::Expanded => Sidebar::Collapsed,
+                Sidebar::Collapsed => Sidebar::Expanded,
+            };
+            if let Err(e) = self.paths.save_settings(&settings) {
+                eprintln!("save settings: {e}");
+            }
+            settings.sidebar == Sidebar::Expanded
+        };
+        app.global::<Shell>().set_sidebar_expanded(expanded);
     }
 
     /// Renames the provider at `index`; an empty name brings back the

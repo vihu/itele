@@ -1,0 +1,183 @@
+// The sidebar of the browse screens: expanded with labels, or collapsed to
+// icons by the user (the button at its foot, or Ctrl+B). Layout:
+// .ai-docs/mockups/07-settings.html.
+
+import { Theme } from "theme.slint";
+import { Kbd } from "atoms.slint";
+
+// The sidebar's state, shared by every screen that shows it; the Rust side
+// fills it and remembers the choice.
+export global Shell {
+    in property <bool> sidebar-expanded: true;
+    // The provider viewed: initials, name, and for example "Until 12 Jan
+    // 2027".
+    in property <string> avatar;
+    in property <string> provider-name;
+    in property <string> provider-meta;
+    callback toggle-sidebar();
+}
+
+component SidebarItem inherits Rectangle {
+    in property <image> icon;
+    in property <string> text;
+    in property <bool> active;
+    // Shown on the right when expanded, for example a key.
+    in property <string> key;
+    // Dimmer than a screen: a control, not a place.
+    in property <bool> quiet;
+    callback clicked();
+    height: 44px;
+    border-radius: Theme.radius-md;
+    background: active ? Theme.surface-3 : touch.has-hover ? Theme.surface-2 : transparent;
+    property <color> ink: root.active ? Theme.text : touch.has-hover ? Theme.text : root.quiet ? Theme.text-3 : Theme.text-2;
+    if Shell.sidebar-expanded: HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 10px;
+        spacing: 14px;
+        VerticalLayout {
+            alignment: center;
+            Image {
+                source: root.icon;
+                width: 20px;
+                height: 20px;
+                colorize: root.active ? Theme.accent : root.ink;
+            }
+        }
+        Text {
+            text: root.text;
+            color: root.ink;
+            font-size: Theme.fs-md;
+            font-weight: 500;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+            overflow: elide;
+        }
+        if root.key != "": VerticalLayout {
+            alignment: center;
+            Kbd {
+                text: root.key;
+            }
+        }
+    }
+    if !Shell.sidebar-expanded: Image {
+        source: root.icon;
+        width: 20px;
+        height: 20px;
+        colorize: root.active ? Theme.accent : root.ink;
+    }
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+export component Sidebar inherits Rectangle {
+    // Index of the highlighted item: 0 home, 1 live TV, 2 guide, 3 movies,
+    // 4 series, 5 search, 6 settings.
+    in property <int> active: 1;
+    callback navigate(int);
+    width: Shell.sidebar-expanded ? 236px : 76px;
+    background: Theme.surface-1;
+    VerticalLayout {
+        padding-top: 22px;
+        padding-bottom: 16px;
+        padding-left: Shell.sidebar-expanded ? 14px : 14px;
+        padding-right: 14px;
+        spacing: 4px;
+        HorizontalLayout {
+            alignment: Shell.sidebar-expanded ? start : center;
+            padding-left: Shell.sidebar-expanded ? 12px : 0px;
+            padding-bottom: 22px;
+            Text {
+                text: Shell.sidebar-expanded ? "itele" : "i";
+                color: Theme.text;
+                font-size: Shell.sidebar-expanded ? 26px : 22px;
+                font-weight: 800;
+            }
+            Text {
+                text: ".";
+                color: Theme.accent;
+                font-size: Shell.sidebar-expanded ? 26px : 22px;
+                font-weight: 800;
+            }
+        }
+        for item[i] in [
+            { icon: @image-url("icons/home.svg"), text: "Home" },
+            { icon: @image-url("icons/tv.svg"), text: "Live TV" },
+            { icon: @image-url("icons/guide.svg"), text: "Guide" },
+            { icon: @image-url("icons/film.svg"), text: "Movies" },
+            { icon: @image-url("icons/series.svg"), text: "Series" },
+            { icon: @image-url("icons/search.svg"), text: "Search" },
+        ]: SidebarItem {
+            icon: item.icon;
+            text: item.text;
+            active: i == root.active;
+            clicked => {
+                root.navigate(i);
+            }
+        }
+        Rectangle {
+            vertical-stretch: 1;
+        }
+        SidebarItem {
+            icon: @image-url("icons/settings.svg");
+            text: "Settings";
+            active: root.active == 6;
+            clicked => {
+                root.navigate(6);
+            }
+        }
+        SidebarItem {
+            icon: Shell.sidebar-expanded ? @image-url("icons/panel-close.svg") : @image-url("icons/panel-open.svg");
+            text: "Collapse";
+            key: "Ctrl+B";
+            quiet: true;
+            clicked => {
+                Shell.toggle-sidebar();
+            }
+        }
+        Rectangle {
+            height: 4px;
+        }
+        Rectangle {
+            border-radius: Theme.radius-md;
+            background: Shell.sidebar-expanded ? Theme.surface-2 : transparent;
+            HorizontalLayout {
+                padding: Shell.sidebar-expanded ? 12px : 0px;
+                spacing: 12px;
+                alignment: Shell.sidebar-expanded ? start : center;
+                Rectangle {
+                    width: 34px;
+                    height: 34px;
+                    border-radius: 9px;
+                    background: Theme.surface-4;
+                    Text {
+                        text: Shell.avatar;
+                        color: Theme.text;
+                        font-size: Theme.fs-sm;
+                        font-weight: 700;
+                    }
+                }
+                if Shell.sidebar-expanded: VerticalLayout {
+                    alignment: center;
+                    horizontal-stretch: 1;
+                    Text {
+                        text: Shell.provider-name;
+                        color: Theme.text;
+                        font-size: Theme.fs-sm;
+                        font-weight: 600;
+                        overflow: elide;
+                    }
+                    if Shell.provider-meta != "": Text {
+                        text: Shell.provider-meta;
+                        color: Theme.text-3;
+                        font-size: Theme.fs-xs;
+                        overflow: elide;
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,103 @@
+// The player's audio or subtitle menu: the tracks, the current one
+// marked, over the whole player so a click elsewhere closes it.
+
+import { ListView } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+
+// A row of the audio or subtitle menu.
+export struct TrackItem {
+    // mpv's track id; 0 is "Off" in the subtitle menu.
+    id: int,
+    name: string,
+    // For example "AC-3 · 5.1".
+    detail: string,
+    selected: bool,
+}
+
+export component TrackMenu inherits Rectangle {
+    in property <[TrackItem]> tracks;
+    // 0 audio, 1 subtitles.
+    in property <int> kind;
+    in property <int> index;
+    // Where the menu stands, above its button.
+    in property <length> menu-x;
+    callback close();
+    callback chosen(int);
+
+    // A click outside the menu closes it.
+    TouchArea {
+        clicked => {
+            root.close();
+        }
+    }
+    Rectangle {
+        x: root.menu-x;
+        y: root.height - 84px - self.height;
+        width: 340px;
+        height: menu.preferred-height;
+        border-radius: Theme.radius-md;
+        background: Theme.surface-2;
+        drop-shadow-blur: 28px;
+        drop-shadow-offset-y: 10px;
+        drop-shadow-color: #00000080;
+        menu := VerticalLayout {
+            padding: 8px;
+            spacing: 2px;
+            Text {
+                text: root.kind == 0 ? "Audio" : "Subtitles";
+                color: Theme.text-3;
+                font-size: Theme.fs-sm;
+                font-weight: 700;
+                height: 30px;
+                vertical-alignment: center;
+                x: 10px;
+            }
+            ListView {
+                height: min(root.tracks.length * 50px, 350px);
+                for track[i] in root.tracks: Rectangle {
+                    height: 50px;
+                    border-radius: Theme.radius-sm;
+                    background: i == root.index ? Theme.surface-4 : row.has-hover ? Theme.surface-3 : transparent;
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 12px;
+                        spacing: 12px;
+                        VerticalLayout {
+                            alignment: center;
+                            width: 18px;
+                            if track.selected: Image {
+                                source: @image-url("icons/check.svg");
+                                width: 18px;
+                                height: 18px;
+                                colorize: Theme.accent;
+                            }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            spacing: 1px;
+                            Text {
+                                text: track.name;
+                                color: track.selected ? Theme.accent : Theme.text;
+                                font-size: Theme.fs-md;
+                                font-weight: 600;
+                                overflow: elide;
+                            }
+                            if track.detail != "": Text {
+                                text: track.detail;
+                                color: Theme.text-3;
+                                font-size: Theme.fs-xs;
+                                overflow: elide;
+                            }
+                        }
+                    }
+                    row := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => {
+                            root.chosen(track.id);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

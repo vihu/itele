@@ -7,11 +7,11 @@ use itele::provider::{self, Library, Provider};
 use itele::xtream::{self, Action, Client, Credentials};
 
 use super::refresh::Force;
-use slint::{Image, ModelRc, SharedString, VecModel};
+use slint::{ComponentHandle, Image, ModelRc, SharedString, VecModel};
 
-use super::{Session, Slot, host_of, initials, library_status, on_ui_thread};
+use super::{Session, Slot, expiry, host_of, initials, library_status, on_ui_thread};
 use crate::live::{Source, View};
-use crate::ui::{ProviderItem, Screen};
+use crate::ui::{ProviderItem, Screen, Shell};
 use crate::vod::Shelves;
 
 impl Session {
@@ -190,27 +190,44 @@ impl Session {
                 View::All => None,
                 View::One(id) => state.slots.iter().position(|s| &s.provider.id == id),
             };
-            let (view_index, view_name, avatar) = match viewed {
-                Some(i) => (
-                    i as i32,
-                    state.slots[i].provider.name.clone(),
-                    initials(&state.slots[i].provider.username),
+            let (view_index, view_name, avatar, meta) = match viewed {
+                Some(i) => {
+                    let slot = &state.slots[i];
+                    let until = state
+                        .catalog
+                        .source(&slot.provider.id)
+                        .and_then(|s| expiry(&s.library.account))
+                        .map(|date| format!("Until {date}"));
+                    (
+                        i as i32,
+                        slot.provider.name.clone(),
+                        initials(&slot.provider.username),
+                        until.unwrap_or_default(),
+                    )
+                }
+                None => (
+                    -1,
+                    "All providers".to_owned(),
+                    "ALL".to_owned(),
+                    format!("{} providers", state.slots.len()),
                 ),
-                None => (-1, "All providers".to_owned(), "ALL".to_owned()),
             };
             (
                 providers,
                 view_index,
                 view_name,
-                avatar,
+                (avatar, meta),
                 state.catalog.group_items(),
                 state.group,
             )
         };
         app.set_providers(ModelRc::new(VecModel::from(providers)));
         app.set_view_index(view_index);
+        let shell = app.global::<Shell>();
+        shell.set_avatar(avatar.0.into());
+        shell.set_provider_name(view_name.as_str().into());
+        shell.set_provider_meta(avatar.1.into());
         app.set_view_name(view_name.into());
-        app.set_avatar(avatar.into());
         app.set_groups(ModelRc::new(VecModel::from(groups)));
         app.set_status(self.view_status());
         self.select_group(group);

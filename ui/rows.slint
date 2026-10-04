@@ -118,7 +118,9 @@ export component ChannelRow inherits Rectangle {
                 }
             }
         }
-        if root.item.next-title != "": HorizontalLayout {
+        // A narrow list (the sidebar expanded, a small window) keeps the
+        // channel and programme names readable instead.
+        if root.item.next-title != "" && root.width >= 560px: HorizontalLayout {
             width: 200px;
             spacing: 6px;
             Text {
