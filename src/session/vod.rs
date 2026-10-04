@@ -1,25 +1,20 @@
-//! Movies and Series: each provider's shelves, loaded on the first visit,
-//! the groups, and the poster grid with its lazy, bounded posters.
+//! Movies and Series: the groups and the poster grid with its lazy,
+//! bounded posters. Loading the shelves is in `shelves.rs`.
 
 use std::collections::HashSet;
 use std::ops::Range;
 use std::rc::Rc;
-use std::thread;
-use std::time::Duration;
 
-use itele::provider::{Cache, Listing, Provider, Shelf};
-use itele::xtream::{Client, Movie, Show};
+use itele::history::Kind as Watched;
 use slint::{Image, Model, ModelRc, SharedString, VecModel};
 
-use super::{Session, State, on_ui_thread};
+use super::{Session, State};
 use crate::art::{Picture, Size};
 use crate::live::View;
 use crate::names::thousands;
 use crate::ui::{PosterItem, Screen};
-use crate::vod::{Shelves, Source};
+use crate::vod::Shelves;
 
-/// A shelf younger than this is not downloaded again.
-const MAX_AGE: Duration = Duration::from_secs(12 * 3600);
 /// Titles asked for posters when a group opens, before the grid reports
 /// what it shows.
 const FIRST_TITLES: i32 = 40;
@@ -31,18 +26,11 @@ pub(super) enum Kind {
     Series,
 }
 
-/// How one of a provider's shelves is loading.
-#[derive(Default)]
-pub(super) struct ShelfState {
-    started: bool,
-    status: String,
-}
-
 /// The poster grid.
 #[derive(Default)]
 pub(super) struct Browse {
     /// The kind showing, or last shown.
-    kind: Option<Kind>,
+    pub(super) kind: Option<Kind>,
     /// Each kind's selected group and title, kept while the other shows.
     groups: [usize; 2],
     indexes: [i32; 2],
@@ -53,12 +41,6 @@ pub(super) struct Browse {
     shown: HashSet<usize>,
     /// Items allowed to hold one: those on screen and a screen either side.
     window: Range<usize>,
-}
-
-/// A shelf that finished loading.
-pub(super) enum Loaded {
-    Movies(Shelf<Movie>),
-    Series(Shelf<Show>),
 }
 
 impl Session {
@@ -230,80 +212,6 @@ impl Session {
 
 // Private API
 impl Session {
-    /// Starts loading `kind` for every provider that has not started yet.
-    fn load_shelves(&self, kind: Kind) {
-        let mut state = self.state.borrow_mut();
-        for slot in &mut state.slots {
-            let shelf = slot.shelf_state(kind);
-            if shelf.started {
-                continue;
-            }
-            shelf.started = true;
-            shelf.status = format!("Loading {}…", kind.noun(2));
-            let cache = self.paths.cache(&slot.provider);
-            let (provider, epoch) = (slot.provider.clone(), slot.epoch);
-            match kind {
-                Kind::Movies => load::<Movie>(kind, provider, cache, epoch),
-                Kind::Series => load::<Show>(kind, provider, cache, epoch),
-            }
-        }
-    }
-
-    fn shelf_ready(&self, id: &str, epoch: u64, loaded: Loaded, updating: bool) {
-        let kind = loaded.kind();
-        {
-            let mut state = self.state.borrow_mut();
-            let Some(slot) = state
-                .slots
-                .iter_mut()
-                .find(|s| s.provider.id == id && s.epoch == epoch)
-            else {
-                return;
-            };
-            let count = loaded.len();
-            slot.shelf_state(kind).status = format!(
-                "{} {}{}",
-                thousands(count),
-                kind.noun(count),
-                if updating { " · updating…" } else { "" }
-            );
-            let name = slot.provider.name.clone();
-            let id = id.to_owned();
-            match loaded {
-                Loaded::Movies(shelf) => state.movies.upsert(Source { id, name, shelf }),
-                Loaded::Series(shelf) => state.shows.upsert(Source { id, name, shelf }),
-            }
-        }
-        if self.state.borrow().browse.kind == Some(kind) {
-            self.refresh_vod();
-        }
-    }
-
-    fn shelf_failed(&self, kind: Kind, id: &str, epoch: u64, error: &str) {
-        {
-            let mut state = self.state.borrow_mut();
-            let loaded = state.shelves(kind).count_of(id);
-            let Some(slot) = state
-                .slots
-                .iter_mut()
-                .find(|s| s.provider.id == id && s.epoch == epoch)
-            else {
-                return;
-            };
-            slot.shelf_state(kind).status = match loaded {
-                Some(count) => format!(
-                    "{} {} · could not update: {error}",
-                    thousands(count),
-                    kind.noun(count)
-                ),
-                None => format!("Could not load {}: {error}", kind.noun(2)),
-            };
-        }
-        if self.state.borrow().browse.kind == Some(kind) {
-            self.refresh_vod();
-        }
-    }
-
     /// Lists `group`'s titles with title `index` selected.
     fn select_vod_group(&self, group: usize, index: i32) {
         let Some(app) = self.app.upgrade() else {
@@ -326,6 +234,7 @@ impl Session {
             browse.window = 0..0;
             (items, name)
         };
+        self.apply_progress();
         let len = items.row_count() as i32;
         let index = if len == 0 {
             -1
@@ -338,6 +247,38 @@ impl Session {
         app.set_vod_index(index);
         app.invoke_reveal_vod();
         self.vod_items_visible(index - FIRST_TITLES / 2, FIRST_TITLES);
+    }
+
+    /// Marks how far each movie in the grid was watched.
+    pub(super) fn apply_progress(&self) {
+        let Some(history) = &self.history else {
+            return;
+        };
+        let state = self.state.borrow();
+        if state.browse.kind != Some(Kind::Movies) {
+            return;
+        }
+        let Some((provider, keys)) = state.movies.keys(state.browse.groups[Kind::Movies.index()])
+        else {
+            return;
+        };
+        let Ok(watched) = history.all(provider, Watched::Movie) else {
+            return;
+        };
+        let items = &state.browse.items;
+        for (row, key) in keys.iter().enumerate() {
+            let Some(progress) = watched.get(key) else {
+                continue;
+            };
+            if let Some(mut item) = items.row_data(row) {
+                item.watched = progress.watched;
+                item.progress = match progress.resume_at() {
+                    Some(_) => progress.fraction(),
+                    None => -1.0,
+                };
+                items.set_row_data(row, item);
+            }
+        }
     }
 
     fn show_poster(&self, url: &str, image: &Image) {
@@ -360,7 +301,7 @@ impl Session {
 }
 
 impl State {
-    fn shelves(&self, kind: Kind) -> &dyn Shelves {
+    pub(super) fn shelves(&self, kind: Kind) -> &dyn Shelves {
         match kind {
             Kind::Movies => &self.movies,
             Kind::Series => &self.shows,
@@ -368,15 +309,6 @@ impl State {
     }
 
     fn shelves_mut(&mut self, kind: Kind) -> &mut dyn Shelves {
-        match kind {
-            Kind::Movies => &mut self.movies,
-            Kind::Series => &mut self.shows,
-        }
-    }
-}
-
-impl super::Slot {
-    fn shelf_state(&mut self, kind: Kind) -> &mut ShelfState {
         match kind {
             Kind::Movies => &mut self.movies,
             Kind::Series => &mut self.shows,
@@ -399,40 +331,12 @@ impl Kind {
         }
     }
 
-    const fn noun(self, count: usize) -> &'static str {
+    pub(super) const fn noun(self, count: usize) -> &'static str {
         match (self, count) {
             (Kind::Movies, 1) => "movie",
             (Kind::Movies, _) => "movies",
             (Kind::Series, _) => "series",
         }
-    }
-}
-
-impl Loaded {
-    const fn kind(&self) -> Kind {
-        match self {
-            Loaded::Movies(_) => Kind::Movies,
-            Loaded::Series(_) => Kind::Series,
-        }
-    }
-
-    fn len(&self) -> usize {
-        match self {
-            Loaded::Movies(shelf) => shelf.titles.len(),
-            Loaded::Series(shelf) => shelf.titles.len(),
-        }
-    }
-}
-
-impl From<Shelf<Movie>> for Loaded {
-    fn from(shelf: Shelf<Movie>) -> Self {
-        Loaded::Movies(shelf)
-    }
-}
-
-impl From<Shelf<Show>> for Loaded {
-    fn from(shelf: Shelf<Show>) -> Self {
-        Loaded::Series(shelf)
     }
 }
 
@@ -464,34 +368,4 @@ fn vod_status(state: &State, kind: Kind) -> String {
             }
         },
     }
-}
-
-/// Loads a shelf on a worker thread: from the cache first, then from the
-/// provider when the cache is missing or older than [`MAX_AGE`].
-fn load<T>(kind: Kind, provider: Provider, cache: Cache, epoch: u64)
-where
-    T: Listing + Send + 'static,
-    Shelf<T>: Into<Loaded>,
-{
-    thread::spawn(move || {
-        let id = provider.id.clone();
-        let fresh = cache.age(T::TITLES).is_some_and(|age| age < MAX_AGE);
-        let cached = Shelf::<T>::from_cache(&cache);
-        let had_cache = cached.is_some();
-        if let Some(shelf) = cached {
-            let id = id.clone();
-            let loaded = shelf.into();
-            on_ui_thread(move |s| s.shelf_ready(&id, epoch, loaded, !fresh));
-        }
-        if had_cache && fresh {
-            return;
-        }
-        let result = provider
-            .credentials()
-            .and_then(|credentials| Shelf::<T>::fetch(&Client::new(credentials), &cache));
-        on_ui_thread(move |s| match result {
-            Ok(shelf) => s.shelf_ready(&id, epoch, shelf.into(), false),
-            Err(e) => s.shelf_failed(kind, &id, epoch, &e.to_string()),
-        });
-    });
 }

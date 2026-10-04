@@ -66,6 +66,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     session::start(&app, Arc::clone(&engine), Paths::system()?);
 
     app.run()?;
+    session::finish();
     engine.detach_render();
     Ok(())
 }

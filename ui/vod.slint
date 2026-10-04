@@ -43,6 +43,34 @@ component PosterCard inherits Rectangle {
                 source: root.item.poster;
                 image-fit: cover;
             }
+            if root.item.progress > 0: Rectangle {
+                x: 10px;
+                y: parent.height - 14px;
+                width: parent.width - 20px;
+                height: 4px;
+                border-radius: 2px;
+                background: #ffffff4d;
+                Rectangle {
+                    x: 0;
+                    width: parent.width * root.item.progress;
+                    border-radius: 2px;
+                    background: Theme.accent;
+                }
+            }
+            if root.item.watched: Rectangle {
+                x: parent.width - self.width - 8px;
+                y: 8px;
+                width: 24px;
+                height: 24px;
+                border-radius: 12px;
+                background: Theme.on-image;
+                Image {
+                    source: @image-url("icons/check.svg");
+                    width: 14px;
+                    height: 14px;
+                    colorize: Theme.text;
+                }
+            }
             if root.selected: Rectangle {
                 border-radius: Theme.radius-md;
                 border-width: 3px;

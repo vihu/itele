@@ -117,6 +117,11 @@ impl Session {
         {
             eprintln!("remove guide: {e}");
         }
+        if let Some(history) = &self.history
+            && let Err(e) = history.remove(&slot.provider.id)
+        {
+            eprintln!("remove watch history: {e}");
+        }
         let cleanup = slot
             .provider
             .forget_password()

@@ -1,58 +1,20 @@
 //! The detail page of a movie or a series: what the list knows at once,
 //! then the provider's details (cached per title, refreshed on every open),
-//! and playing it. The series' side, seasons and episodes, is in
-//! `series.rs`.
+//! and playing it. What a page holds is in `page.rs`; the series' side,
+//! seasons and episodes, in `series.rs`.
 
-use std::rc::Rc;
 use std::thread;
 
+use itele::history::Kind as Watched;
 use itele::provider::Provider;
-use itele::xtream::{self, Action, Client, Credentials, Details, Movie, MovieInfo, Show, ShowInfo};
-use slint::{Image, Model, SharedString, VecModel};
+use itele::xtream::{self, Action, Client, Credentials, Movie, MovieInfo};
+use slint::Image;
 
-use super::timefmt::runtime;
+use super::page::{Page, Subject, loading_note, movie_feature};
 use super::vod::Kind;
-use super::{Content, Playing, Session, Title, on_ui_thread};
+use super::{Content, Playing, Session, Start, Title, on_ui_thread};
 use crate::art::Size;
-use crate::names::tint;
-use crate::ui::{EpisodeItem, ProgrammeInfo, Screen, TitleDetails};
-
-/// The page showing.
-pub(super) struct Page {
-    /// Tells this page's background results from an earlier page's.
-    pub(super) token: u64,
-    pub(super) provider: String,
-    pub(super) subject: Subject,
-    poster: Option<Image>,
-    backdrop: Option<Image>,
-    /// Shown while details load, or when they fail.
-    pub(super) note: String,
-}
-
-/// What the page is about, with the provider's details once known.
-pub(super) enum Subject {
-    Movie {
-        movie: Movie,
-        info: Option<MovieInfo>,
-    },
-    Show {
-        show: Show,
-        info: Option<ShowInfo>,
-        /// Index into the seasons of `info`.
-        season: usize,
-        /// The selected season's episodes, updated as stills arrive.
-        episodes: Rc<VecModel<EpisodeItem>>,
-        /// Each episode's still URL, empty when it has none.
-        stills: Vec<String>,
-    },
-}
-
-/// What playing a title needs: where, what to call it, and the banner.
-pub(super) struct Feature {
-    pub(super) url: String,
-    pub(super) name: String,
-    pub(super) programme: ProgrammeInfo,
-}
+use crate::ui::Screen;
 
 impl Session {
     /// Opens the page of `provider`'s `movie`.
@@ -64,14 +26,17 @@ impl Session {
         let action = Action::MovieInfo(movie.id);
         let info = cache.load(action, xtream::parse_movie_info);
         let loading = info.is_none();
-        self.show_page(Page {
-            token,
-            provider,
-            subject: Subject::Movie { movie, info },
-            poster: None,
-            backdrop: None,
-            note: loading_note(loading),
+        let progress = self.history.as_ref().and_then(|h| {
+            h.progress(&provider, Watched::Movie, &movie.id.0.to_string())
+                .ok()
+                .flatten()
         });
+        let subject = Subject::Movie {
+            movie,
+            info,
+            progress,
+        };
+        self.show_page(Page::new(token, provider, subject, loading_note(loading)));
         thread::spawn(move || {
             let result = credentials
                 .map_or_else(|| account.credentials(), Ok)
@@ -90,11 +55,13 @@ impl Session {
             return;
         };
         self.show(kind.screen());
+        self.apply_progress();
         app.invoke_reveal_vod();
     }
 
-    /// Plays the page's movie, or the selected episode of its series.
-    pub(super) fn details_play(&self) {
+    /// Plays the page's movie, or the selected episode of its series,
+    /// from `start`.
+    pub(super) fn details_play(&self, start: Start) {
         let Some(app) = self.app.upgrade() else {
             return;
         };
@@ -112,7 +79,11 @@ impl Session {
                 return self.set_page_note("Connecting to the provider…");
             };
             let feature = match &page.subject {
-                Subject::Movie { movie, info } => movie_feature(page, movie, info, credentials),
+                Subject::Movie {
+                    movie,
+                    info,
+                    progress,
+                } => movie_feature(page, movie, info, progress, credentials),
                 Subject::Show { .. } => {
                     match episode.and_then(|i| page.episode_feature(i, credentials)) {
                         Some(feature) => feature,
@@ -123,7 +94,11 @@ impl Session {
             (page.provider.clone(), slot.provider.name.clone(), feature)
         };
         self.select_timer.stop();
-        if self.engine.load(&feature.url).is_err() {
+        let at = match start {
+            Start::Resume => feature.resume,
+            Start::Beginning => None,
+        };
+        if self.load(&feature.url, at).is_err() {
             return self.set_page_note("Could not start playback");
         }
         app.set_video_note("Loading…".into());
@@ -131,41 +106,25 @@ impl Session {
         app.set_programme(feature.programme);
         self.state.borrow_mut().playing = Some(Playing {
             provider,
-            content: Content::Title(Title { name: feature.name }),
+            content: Content::Title(Title {
+                name: feature.name,
+                entry: feature.entry,
+            }),
         });
         self.enter_player();
     }
 
     /// A picture for the page arrived.
     pub(super) fn page_art_ready(&self, url: &str, size: Size, image: &Image) {
-        {
-            let mut state = self.state.borrow_mut();
-            let Some(page) = state.page.as_mut() else {
-                return;
-            };
-            let (poster, backdrop) = page.art_urls();
-            match (size, &page.subject) {
-                (Size::Poster, _) if poster == url => page.poster = Some(image.clone()),
-                (Size::Backdrop, _) if backdrop == url => page.backdrop = Some(image.clone()),
-                (
-                    Size::Still,
-                    Subject::Show {
-                        episodes, stills, ..
-                    },
-                ) => {
-                    for (row, _) in stills.iter().enumerate().filter(|(_, u)| *u == url) {
-                        if let Some(mut item) = episodes.row_data(row) {
-                            item.still = image.clone();
-                            item.has_still = true;
-                            episodes.set_row_data(row, item);
-                        }
-                    }
-                    return;
-                }
-                _ => return,
-            }
+        let changed = self
+            .state
+            .borrow_mut()
+            .page
+            .as_mut()
+            .is_some_and(|page| page.set_art(url, size, image));
+        if changed {
+            self.push_page();
         }
-        self.push_page();
     }
 
     /// Bumps the page token; `None` when `provider` is gone. Returns the
@@ -200,24 +159,57 @@ impl Session {
 
     /// Asks for the page's poster and backdrop unless they are shown.
     pub(super) fn request_page_art(&self) {
-        let wanted: Vec<(String, Size)> = {
-            let state = self.state.borrow();
-            let Some(page) = &state.page else {
-                return;
-            };
-            let (poster, backdrop) = page.art_urls();
-            [
-                (poster, Size::Poster, page.poster.is_none()),
-                (backdrop, Size::Backdrop, page.backdrop.is_none()),
-            ]
-            .into_iter()
-            .filter(|(url, _, missing)| *missing && !url.is_empty())
-            .map(|(url, size, _)| (url, size))
-            .collect()
+        let wanted = match &self.state.borrow().page {
+            Some(page) => page.missing_art(),
+            None => return,
         };
         let mut art = self.art.borrow_mut();
         for (url, size) in wanted {
             art.request(&url, size);
+        }
+    }
+
+    /// Reads again how far the page's title, or its series' episodes, were
+    /// watched; on a series, selects the episode to resume.
+    pub(super) fn refresh_page_history(&self) {
+        let Some(history) = &self.history else {
+            return;
+        };
+        let series = {
+            let mut state = self.state.borrow_mut();
+            let Some(page) = state.page.as_mut() else {
+                return;
+            };
+            let provider = page.provider.clone();
+            match &mut page.subject {
+                Subject::Movie {
+                    movie, progress, ..
+                } => {
+                    *progress = history
+                        .progress(&provider, Watched::Movie, &movie.id.0.to_string())
+                        .ok()
+                        .flatten();
+                    false
+                }
+                Subject::Show {
+                    show,
+                    watched,
+                    last,
+                    targeted,
+                    ..
+                } => {
+                    if let Ok((episodes, latest)) = history.episodes(&provider, show.id.0) {
+                        *watched = episodes;
+                        *last = latest;
+                        *targeted = false;
+                    }
+                    true
+                }
+            }
+        };
+        self.push_page();
+        if series {
+            self.fill_season(0);
         }
     }
 
@@ -263,165 +255,5 @@ impl Session {
             note.clone_into(&mut page.note);
         }
         self.push_page();
-    }
-}
-
-impl Page {
-    /// A new page about `subject`, without pictures yet.
-    pub(super) fn new(token: u64, provider: String, subject: Subject, note: String) -> Self {
-        Self {
-            token,
-            provider,
-            subject,
-            poster: None,
-            backdrop: None,
-            note,
-        }
-    }
-
-    fn kind(&self) -> Kind {
-        match self.subject {
-            Subject::Movie { .. } => Kind::Movies,
-            Subject::Show { .. } => Kind::Series,
-        }
-    }
-
-    /// The details the page shows, from the list and the provider.
-    fn shared(&self) -> Option<&Details> {
-        match &self.subject {
-            Subject::Movie { info, .. } => info.as_ref().map(|i| &i.details),
-            Subject::Show { info, .. } => info.as_ref().map(|i| &i.details),
-        }
-    }
-
-    /// The page's poster and backdrop URLs, empty when it has none.
-    fn art_urls(&self) -> (String, String) {
-        let listed = match &self.subject {
-            Subject::Movie { movie, .. } => movie.poster.clone(),
-            Subject::Show { show, .. } => show.poster.clone(),
-        };
-        let details = self.shared();
-        let poster = listed
-            .or_else(|| details.and_then(|d| d.poster.clone()))
-            .unwrap_or_default();
-        let backdrop = details.and_then(|d| d.backdrop.clone()).unwrap_or_default();
-        (poster, backdrop)
-    }
-
-    fn details(&self) -> TitleDetails {
-        let details = self.shared();
-        let (name, year, rating, extent, back_label) = match &self.subject {
-            Subject::Movie { movie, .. } => (
-                &movie.name,
-                movie.year,
-                movie.rating,
-                details
-                    .and_then(|d| d.duration)
-                    .filter(|&secs| secs >= 60)
-                    .map(|secs| runtime(i64::from(secs))),
-                "Movies",
-            ),
-            Subject::Show { show, info, .. } => (
-                &show.name,
-                show.year,
-                show.rating,
-                info.as_ref().map(|i| match i.seasons.len() {
-                    1 => "1 season".to_owned(),
-                    n => format!("{n} seasons"),
-                }),
-                "Series",
-            ),
-        };
-        let meta = [
-            year.map(|y| y.to_string()),
-            extent,
-            details.map(|d| d.genre.clone()).filter(|g| !g.is_empty()),
-        ]
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>()
-        .join(" · ");
-        TitleDetails {
-            title: name.as_str().into(),
-            meta: meta.into(),
-            rating: rating
-                .or(details.and_then(|d| d.rating))
-                .map(|r| format!("{r:.1}").into())
-                .unwrap_or_default(),
-            plot: details.map(|d| d.plot.as_str()).unwrap_or("").into(),
-            credits: details.map(credits).unwrap_or_default().into(),
-            tint: tint(name),
-            has_poster: self.poster.is_some(),
-            poster: self.poster.clone().unwrap_or_default(),
-            has_backdrop: self.backdrop.is_some(),
-            backdrop: self.backdrop.clone().unwrap_or_default(),
-            note: self.note.as_str().into(),
-            back_label: back_label.into(),
-            play_label: "Play".into(),
-        }
-    }
-}
-
-/// "Loading details…" while nothing is cached.
-pub(super) fn loading_note(loading: bool) -> String {
-    if loading {
-        "Loading details…".to_owned()
-    } else {
-        String::new()
-    }
-}
-
-fn movie_feature(
-    page: &Page,
-    movie: &Movie,
-    info: &Option<MovieInfo>,
-    credentials: &Credentials,
-) -> Feature {
-    let details = page.details();
-    let extension = info
-        .as_ref()
-        .and_then(|i| i.extension.as_deref())
-        .unwrap_or(&movie.extension);
-    Feature {
-        url: credentials.movie_url(movie.id, extension),
-        name: movie.name.clone(),
-        programme: ProgrammeInfo {
-            title: details.title,
-            time: details.meta,
-            left: SharedString::new(),
-            description: details.plot,
-            progress: 0.0,
-        },
-    }
-}
-
-/// For example `With Ana Dimas, Teo Larsen · Directed by Ida Sund`.
-fn credits(details: &Details) -> String {
-    let cast = (!details.cast.is_empty()).then(|| format!("With {}", details.cast));
-    let director =
-        (!details.director.is_empty()).then(|| format!("Directed by {}", details.director));
-    [cast, director]
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>()
-        .join(" · ")
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn credits_join_what_is_known() {
-        let mut details = Details {
-            cast: "Ana Dimas".into(),
-            director: "Ida Sund".into(),
-            ..Details::default()
-        };
-        assert_eq!(credits(&details), "With Ana Dimas · Directed by Ida Sund");
-        details.cast.clear();
-        assert_eq!(credits(&details), "Directed by Ida Sund");
-        details.director.clear();
-        assert_eq!(credits(&details), "");
     }
 }

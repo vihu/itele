@@ -30,6 +30,8 @@ pub trait Tile {
     fn rating(&self) -> Option<f32>;
     /// Category, if any.
     fn category(&self) -> Option<&CategoryId>;
+    /// The provider's id, as the watch history keys it.
+    fn key(&self) -> String;
 }
 
 /// A [`Catalog`] of either kind, for code that does not care which.
@@ -52,6 +54,9 @@ pub trait Shelves {
     fn poster_items(&self, group: usize) -> Vec<PosterItem>;
     /// Each title's poster URL in `group`, empty when it has none.
     fn posters(&self, group: usize) -> Vec<String>;
+    /// The provider of `group` and each title's id, as the watch history
+    /// keys it.
+    fn keys(&self, group: usize) -> Option<(&str, Vec<String>)>;
 }
 
 /// Every loaded provider's titles of one kind, grouped for the [`View`].
@@ -180,6 +185,16 @@ impl<T: Tile> Shelves for Catalog<T> {
             .map(|&i| titles[i].poster().unwrap_or("").to_owned())
             .collect()
     }
+
+    fn keys(&self, group: usize) -> Option<(&str, Vec<String>)> {
+        let g = self.groups.get(group)?;
+        let source = &self.sources[g.source];
+        let titles = &source.shelf.titles;
+        Some((
+            source.id.as_str(),
+            g.titles.iter().map(|&i| titles[i].key()).collect(),
+        ))
+    }
 }
 
 // Private API
@@ -238,6 +253,8 @@ fn poster_item<T: Tile>(title: &T, provider: &str) -> PosterItem {
         tint: tint(title.name()),
         poster: Image::default(),
         has_poster: false,
+        progress: -1.0,
+        watched: false,
     }
 }
 
@@ -263,6 +280,10 @@ impl Tile for Movie {
     fn category(&self) -> Option<&CategoryId> {
         self.category_id.as_ref()
     }
+
+    fn key(&self) -> String {
+        self.id.0.to_string()
+    }
 }
 
 impl Tile for Show {
@@ -286,6 +307,10 @@ impl Tile for Show {
 
     fn category(&self) -> Option<&CategoryId> {
         self.category_id.as_ref()
+    }
+
+    fn key(&self) -> String {
+        self.id.0.to_string()
     }
 }
 

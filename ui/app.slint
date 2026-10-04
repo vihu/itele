@@ -118,6 +118,7 @@ export component AppWindow inherits Window {
     in property <[EpisodeItem]> details-episodes;
     in-out property <int> details-episode-index;
     callback details-play();
+    callback details-restart();
     callback details-back();
     callback details-season-selected(int);
 
@@ -359,6 +360,9 @@ export component AppWindow inherits Window {
         episode-index <=> root.details-episode-index;
         play => {
             root.details-play();
+        }
+        restart => {
+            root.details-restart();
         }
         season-selected(i) => {
             root.details-season-selected(i);

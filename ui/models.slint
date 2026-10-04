@@ -118,6 +118,9 @@ export struct PosterItem {
     tint: color,
     poster: image,
     has-poster: bool,
+    // How far it was watched, 0 to 1; below 0 when never started.
+    progress: float,
+    watched: bool,
 }
 
 // The detail page of a movie or a series.
@@ -139,8 +142,12 @@ export struct TitleDetails {
     note: string,
     // Where the back button goes, for example "Movies".
     back-label: string,
-    // The main button, for example "Play" or "Play S1 E1".
+    // The main button, for example "Play" or "Resume".
     play-label: string,
+    // Time left when resuming, for example "18 min left".
+    left: string,
+    // Offer "From the beginning" beside Resume.
+    restart: bool,
 }
 
 // A season tab on a series' page.
@@ -161,4 +168,11 @@ export struct EpisodeItem {
     has-still: bool,
     // For example "S2 E4".
     code: string,
+    // How far it was watched, 0 to 1; below 0 when never started.
+    progress: float,
+    watched: bool,
+    // Started and not finished: Play resumes it.
+    resumable: bool,
+    // When resumable, for example "18 min left".
+    left: string,
 }

@@ -56,7 +56,7 @@ impl Session {
                 minutes,
                 source.library.account.timezone.as_deref(),
             );
-            if self.engine.load(&url).is_err() {
+            if self.load(&url, None).is_err() {
                 return app.set_video_note("Could not start the replay".into());
             }
             app.set_video_note("Tuning…".into());

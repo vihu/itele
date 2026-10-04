@@ -1,14 +1,16 @@
 //! A series' page: its seasons, the selected season's episodes with their
 //! stills, and the episode to play.
 
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::thread;
 
+use itele::history::{Entry, Kind as Watched, Progress};
 use itele::xtream::{self, Action, Client, Credentials, Episode, Show, ShowInfo};
 use slint::{Model, ModelRc, SharedString, VecModel};
 
-use super::details::{Feature, Page, Subject, loading_note};
-use super::timefmt::runtime;
+use super::page::{Feature, Page, Subject, loading_note};
+use super::timefmt::{minutes_left, runtime};
 use super::{Session, on_ui_thread};
 use crate::art::Size;
 use crate::ui::{EpisodeItem, ProgrammeInfo, SeasonItem};
@@ -23,12 +25,20 @@ impl Session {
         let action = Action::ShowInfo(show.id);
         let info = cache.load(action, xtream::parse_show_info);
         let loading = info.is_none();
+        let (watched, last) = self
+            .history
+            .as_ref()
+            .and_then(|h| h.episodes(&provider, show.id.0).ok())
+            .unwrap_or_default();
         let subject = Subject::Show {
             show,
             info,
             season: 0,
             episodes: Rc::default(),
             stills: Vec::new(),
+            watched,
+            last,
+            targeted: false,
         };
         self.show_page(Page::new(token, provider, subject, loading_note(loading)));
         self.fill_season(0);
@@ -94,22 +104,35 @@ impl Session {
 
     /// Lists the selected season's episodes with episode `index` selected,
     /// and asks for their stills.
-    fn fill_season(&self, index: i32) {
+    pub(super) fn fill_season(&self, index: i32) {
         let Some(app) = self.app.upgrade() else {
             return;
         };
-        let (seasons, season, episodes, stills) = {
+        let (seasons, season, episodes, stills, index) = {
             let mut state = self.state.borrow_mut();
             let Some(Subject::Show {
                 info,
                 season,
                 episodes,
                 stills,
+                watched,
+                last,
+                targeted,
                 ..
             }) = state.page.as_mut().map(|p| &mut p.subject)
             else {
                 return;
             };
+            let mut index = index;
+            if let Some(info) = info.as_ref().filter(|_| !*targeted) {
+                *targeted = true;
+                if let Some((target_season, target_index)) =
+                    resume_target(info, watched, last.as_deref())
+                {
+                    *season = target_season;
+                    index = target_index as i32;
+                }
+            }
             let (seasons, listed) = match info {
                 Some(info) => {
                     let seasons = info
@@ -135,9 +158,12 @@ impl Session {
                 .map(|e| e.still.clone().unwrap_or_default())
                 .collect();
             *episodes = Rc::new(VecModel::from(
-                listed.into_iter().map(episode_item).collect::<Vec<_>>(),
+                listed
+                    .into_iter()
+                    .map(|e| episode_item(e, watched.get(&e.id.0)))
+                    .collect::<Vec<_>>(),
             ));
-            (seasons, *season, Rc::clone(episodes), stills.clone())
+            (seasons, *season, Rc::clone(episodes), stills.clone(), index)
         };
         let len = episodes.row_count() as i32;
         app.set_details_seasons(ModelRc::new(VecModel::from(seasons)));
@@ -164,7 +190,11 @@ impl Page {
         credentials: &Credentials,
     ) -> Option<Feature> {
         let Subject::Show {
-            show, info, season, ..
+            show,
+            info,
+            season,
+            watched,
+            ..
         } = &self.subject
         else {
             return None;
@@ -180,9 +210,18 @@ impl Page {
         .flatten()
         .collect::<Vec<_>>()
         .join(" · ");
+        let name = format!("{} · {code}", show.name);
         Some(Feature {
             url: credentials.episode_url(&episode.id, &episode.extension),
-            name: format!("{} · {code}", show.name),
+            entry: Entry {
+                provider: self.provider.clone(),
+                kind: Watched::Episode,
+                id: episode.id.0.clone(),
+                series: Some(show.id.0),
+                title: name.clone(),
+            },
+            resume: watched.get(&episode.id.0).and_then(Progress::resume_at),
+            name,
             programme: ProgrammeInfo {
                 title: episode.title.as_str().into(),
                 time: subtitle.into(),
@@ -205,15 +244,58 @@ fn season_episodes(info: &ShowInfo, season: usize) -> Vec<&Episode> {
         .collect()
 }
 
-fn episode_item(episode: &Episode) -> EpisodeItem {
+fn episode_item(episode: &Episode, progress: Option<&Progress>) -> EpisodeItem {
+    let resume = progress.filter(|p| p.resume_at().is_some());
     EpisodeItem {
         number: episode.number.to_string().into(),
         title: episode.title.as_str().into(),
         plot: episode.plot.as_str().into(),
         duration: duration(episode).unwrap_or_default().into(),
         code: code(episode).into(),
+        progress: match progress {
+            Some(p) if p.watched => 1.0,
+            Some(p) if resume.is_some() => p.fraction(),
+            _ => -1.0,
+        },
+        watched: progress.is_some_and(|p| p.watched),
+        resumable: resume.is_some(),
+        left: resume
+            .map(|p| minutes_left(p.left() as i64))
+            .unwrap_or_default()
+            .into(),
         ..EpisodeItem::default()
     }
+}
+
+/// The season and episode to select on opening: the episode watched last,
+/// or the one after it when it was finished. Indexes are into the seasons
+/// and into that season's episodes.
+fn resume_target(
+    info: &ShowInfo,
+    watched: &HashMap<String, Progress>,
+    last: Option<&str>,
+) -> Option<(usize, usize)> {
+    let at = info
+        .episodes
+        .iter()
+        .position(|e| Some(e.id.0.as_str()) == last)?;
+    let finished = watched
+        .get(&info.episodes[at].id.0)
+        .is_some_and(|p| p.watched);
+    let target = match info.episodes.get(at + 1) {
+        Some(next) if finished => next,
+        _ => &info.episodes[at],
+    };
+    let season = info
+        .seasons
+        .iter()
+        .position(|s| s.number == target.season)?;
+    let index = info
+        .episodes
+        .iter()
+        .filter(|e| e.season == target.season)
+        .position(|e| e.id == target.id)?;
+    Some((season, index))
 }
 
 /// For example `S2 E4`.
@@ -250,5 +332,36 @@ mod tests {
         assert_eq!(ids(1), ["b", "c"]);
         assert!(ids(2).is_empty());
         assert_eq!(code(season_episodes(&info, 1)[1]), "S3 E2");
+    }
+
+    #[test]
+    fn resume_targets_the_last_episode_or_the_next() {
+        let info = xtream::parse_show_info(
+            r#"{"episodes":{"1":[{"id":"a","episode_num":1},{"id":"b","episode_num":2}],
+                            "2":[{"id":"c","episode_num":1}]}}"#,
+        )
+        .unwrap();
+        let progress = |position, watched| Progress {
+            position,
+            duration: 1500.0,
+            watched,
+            updated: 0,
+        };
+        let mut watched = HashMap::new();
+        assert_eq!(resume_target(&info, &watched, None), None);
+        watched.insert("b".to_owned(), progress(600.0, false));
+        assert_eq!(resume_target(&info, &watched, Some("b")), Some((0, 1)));
+        watched.insert("b".to_owned(), progress(1500.0, true));
+        assert_eq!(
+            resume_target(&info, &watched, Some("b")),
+            Some((1, 0)),
+            "finished: the next, in the next season"
+        );
+        watched.insert("c".to_owned(), progress(1500.0, true));
+        assert_eq!(
+            resume_target(&info, &watched, Some("c")),
+            Some((1, 0)),
+            "the last stays"
+        );
     }
 }

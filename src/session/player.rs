@@ -1,7 +1,7 @@
 //! The player screen: entering and leaving it, channel switching,
 //! fullscreen, the banner, and its live readout of mpv.
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use slint::{ComponentHandle, Model, ModelRc, TimerMode, VecModel};
 
@@ -9,6 +9,9 @@ use super::{BANNER_TIME, Content, POLL_INTERVAL, Session, with_session};
 use crate::info;
 use crate::playback::{self, Timeline};
 use crate::ui::Screen;
+
+/// How often the progress of a title playing is saved.
+const SAVE_EVERY: Duration = Duration::from_secs(10);
 
 impl Session {
     pub(super) fn watch(&self) {
@@ -56,8 +59,10 @@ impl Session {
             .as_ref()
             .is_some_and(|p| matches!(p.content, Content::Title(_)));
         if title {
+            self.save_progress();
             self.stop_preview();
             self.show(Screen::Details);
+            self.refresh_page_history();
         } else {
             self.show(Screen::Live);
             app.invoke_reveal_current();
@@ -71,7 +76,41 @@ impl Session {
             .upgrade()
             .is_some_and(|app| app.get_screen() == Screen::Player);
         if in_player && self.timeline() == Timeline::Title {
+            // At the end mpv has no position left to read.
+            self.save_at_end();
             self.back();
+        }
+    }
+
+    /// Saves how far the title playing is, if one is.
+    pub(super) fn save_progress(&self) {
+        let (Some(position), duration) = (self.engine.position(), self.engine.duration()) else {
+            return;
+        };
+        self.record(position, duration.unwrap_or(0.0));
+    }
+
+    /// Saves the title playing as watched to the end.
+    fn save_at_end(&self) {
+        if let Some(duration) = self.engine.duration() {
+            self.record(duration, duration);
+        }
+    }
+
+    fn record(&self, position: f64, duration: f64) {
+        let (Some(history), Some(entry)) = (&self.history, self.playing_entry()) else {
+            return;
+        };
+        self.saved_at.set(Instant::now());
+        if let Err(e) = history.save(&entry, position, duration, super::timefmt::now()) {
+            eprintln!("save progress: {e}");
+        }
+    }
+
+    fn playing_entry(&self) -> Option<itele::history::Entry> {
+        match &self.state.borrow().playing.as_ref()?.content {
+            Content::Title(title) => Some(title.entry.clone()),
+            Content::Live(_) | Content::Replay(..) => None,
         }
     }
 
@@ -113,11 +152,15 @@ impl Session {
         let Some(app) = self.app.upgrade() else {
             return;
         };
+        let timeline = self.timeline();
         app.set_player(playback::read(
             &self.engine,
             app.window().is_fullscreen(),
-            self.timeline(),
+            timeline,
         ));
+        if timeline == Timeline::Title && self.saved_at.get().elapsed() >= SAVE_EVERY {
+            self.save_progress();
+        }
         if app.get_info_visible() {
             let name = match self.state.borrow().playing.as_ref().map(|p| &p.content) {
                 Some(Content::Title(title)) => title.name.as_str().into(),

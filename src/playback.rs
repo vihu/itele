@@ -102,9 +102,13 @@ pub fn toggle_pause(engine: &Engine) {
     report("pause", engine.set_paused(!engine.is_paused()));
 }
 
-/// Jumps `seconds` within the cached window (negative is back).
+/// Jumps `seconds` (negative is back), exactly rather than to a keyframe:
+/// movies can have one only every ten seconds or more.
 pub fn seek(engine: &Engine, seconds: f64) {
-    report("seek", engine.seek_relative(seconds));
+    report(
+        "seek",
+        engine.command("seek", &[&seconds.to_string(), "relative+exact"]),
+    );
 }
 
 /// Jumps to `fraction` (0 to 1) of the timeline.

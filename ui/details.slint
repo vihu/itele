@@ -78,6 +78,20 @@ component EpisodeRow inherits Rectangle {
                 source: root.item.still;
                 image-fit: cover;
             }
+            if root.item.resumable: Rectangle {
+                x: 8px;
+                y: parent.height - 12px;
+                width: parent.width - 16px;
+                height: 4px;
+                border-radius: 2px;
+                background: #ffffff4d;
+                Rectangle {
+                    x: 0;
+                    width: parent.width * root.item.progress;
+                    border-radius: 2px;
+                    background: Theme.accent;
+                }
+            }
         }
         VerticalLayout {
             alignment: center;
@@ -99,14 +113,26 @@ component EpisodeRow inherits Rectangle {
                 max-height: 38px;
             }
         }
-        Text {
-            width: 110px;
-            text: root.item.duration;
-            color: root.selected ? Theme.accent : Theme.text-3;
-            font-size: Theme.fs-sm;
-            font-weight: 600;
-            horizontal-alignment: right;
-            vertical-alignment: center;
+        HorizontalLayout {
+            width: 120px;
+            alignment: end;
+            spacing: 6px;
+            if root.item.watched: VerticalLayout {
+                alignment: center;
+                Image {
+                    source: @image-url("icons/check.svg");
+                    width: 14px;
+                    height: 14px;
+                    colorize: Theme.text-2;
+                }
+            }
+            Text {
+                text: root.item.watched ? "Watched" : root.item.resumable ? root.item.left : root.item.duration;
+                color: root.item.resumable || root.selected ? Theme.accent : root.item.watched ? Theme.text-2 : Theme.text-3;
+                font-size: Theme.fs-sm;
+                font-weight: 600;
+                vertical-alignment: center;
+            }
         }
     }
     touch := TouchArea {
@@ -129,6 +155,7 @@ export component DetailsScreen inherits Rectangle {
     in property <[EpisodeItem]> episodes;
     in-out property <int> episode-index;
     callback play();
+    callback restart();
     callback back();
     callback season-selected(int);
     callback navigate(int);
@@ -154,6 +181,14 @@ export component DetailsScreen inherits Rectangle {
     }
 
     property <length> hero-height: 400px;
+    // A series' main button follows the selected episode.
+    property <bool> has-episode: root.series && root.episode-index >= 0 && root.episode-index < root.episodes.length;
+    property <EpisodeItem> episode: root.has-episode ? root.episodes[root.episode-index] : { progress: -1 };
+    property <string> play-text: !root.series ? root.details.play-label
+        : root.has-episode ? (root.episode.resumable ? "Resume " : "Play ") + root.episode.code
+        : "Play";
+    property <string> left-text: root.series ? root.episode.left : root.details.left;
+    property <bool> can-restart: root.series ? root.episode.resumable : root.details.restart;
 
     function select-episode(index: int) {
         if (root.episodes.length > 0) {
@@ -174,6 +209,8 @@ export component DetailsScreen inherits Rectangle {
             let key = event.text.to-lowercase();
             if (event.text == Key.Return || key == " ") {
                 root.play();
+            } else if (key == "b" && root.can-restart) {
+                root.restart();
             } else if (event.text == Key.Escape || event.text == Key.Backspace) {
                 root.back();
             } else if (root.series && event.text == Key.UpArrow) {
@@ -327,13 +364,28 @@ export component DetailsScreen inherits Rectangle {
                             spacing: 12px;
                             Button {
                                 kind: ButtonKind.primary;
-                                text: root.series && root.episode-index >= 0 && root.episode-index < root.episodes.length
-                                    ? "Play " + root.episodes[root.episode-index].code : root.details.play-label;
+                                text: root.play-text;
                                 hint: "Enter";
                                 icon: @image-url("icons/play.svg");
                                 has-icon: true;
                                 clicked => {
                                     root.play();
+                                }
+                            }
+                            if root.left-text != "": Text {
+                                text: root.left-text;
+                                color: Theme.text-3;
+                                font-size: Theme.fs-sm;
+                                vertical-alignment: center;
+                            }
+                            if root.can-restart: Button {
+                                kind: ButtonKind.secondary;
+                                text: "From the beginning";
+                                hint: "B";
+                                icon: @image-url("icons/back.svg");
+                                has-icon: true;
+                                clicked => {
+                                    root.restart();
                                 }
                             }
                         }

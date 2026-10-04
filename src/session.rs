@@ -11,10 +11,12 @@ mod catchup;
 mod details;
 mod grid;
 mod guide;
+mod page;
 mod player;
 mod providers;
 mod search;
 mod series;
+mod shelves;
 mod timefmt;
 mod vod;
 
@@ -24,6 +26,7 @@ use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
 
 use itele::epg::{Programme, Store};
+use itele::history::{Entry, History};
 use itele::provider::{Library, Paths, Provider};
 use itele::xtream::{Credentials, LiveStream, Movie, Show};
 use mpv_engine::{EndReason, Engine, PlaybackEvent};
@@ -62,6 +65,11 @@ pub struct Session {
     /// Read side of the guide store; imports write through their own
     /// connection on a worker thread.
     guide: RefCell<Option<Store>>,
+    /// Watch history; `None` when it cannot be opened, which only loses
+    /// resume.
+    history: Option<History>,
+    /// When the progress of the title playing was last saved.
+    saved_at: Cell<Instant>,
     select_timer: Timer,
     banner_timer: Timer,
     banner_until: Cell<Instant>,
@@ -93,7 +101,7 @@ struct State {
     shows: crate::vod::Catalog<Show>,
     browse: vod::Browse,
     /// The detail page showing, if any.
-    page: Option<details::Page>,
+    page: Option<page::Page>,
     /// Source of page tokens.
     next_page: u64,
     playing: Option<Playing>,
@@ -108,8 +116,8 @@ struct Slot {
     status: String,
     /// How the last guide import went; empty before the first one.
     guide: String,
-    movies: vod::ShelfState,
-    shows: vod::ShelfState,
+    movies: shelves::ShelfState,
+    shows: shelves::ShelfState,
     /// Results of work started for an earlier slot with the same provider
     /// (signed out since) carry another epoch and are dropped.
     epoch: u64,
@@ -136,6 +144,8 @@ enum Content {
 #[derive(Clone)]
 struct Title {
     name: String,
+    /// Where its progress is kept.
+    entry: Entry,
 }
 
 impl Playing {
@@ -159,6 +169,9 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
         on_ui_thread(move |s| s.art_ready(url, size, picture));
     });
     let guide = Store::open(&paths.guide_path()).ok();
+    let history = History::open(&paths.history_path())
+        .inspect_err(|e| eprintln!("watch history: {e}"))
+        .ok();
     let session = Rc::new(Session {
         app: app.as_weak(),
         paths,
@@ -167,6 +180,8 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
         logos: RefCell::new(logos),
         art: RefCell::new(art),
         guide: RefCell::new(guide),
+        history,
+        saved_at: Cell::new(Instant::now()),
         select_timer: Timer::default(),
         banner_timer: Timer::default(),
         banner_until: Cell::new(Instant::now()),
@@ -220,7 +235,8 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
     app.on_vod_group_selected(|i| with_session(|s| s.vod_group_selected(i)));
     app.on_vod_items_visible(|first, count| with_session(|s| s.vod_items_visible(first, count)));
     app.on_vod_open(|i| with_session(|s| s.vod_open(i)));
-    app.on_details_play(|| with_session(|s| s.details_play()));
+    app.on_details_play(|| with_session(|s| s.details_play(Start::Resume)));
+    app.on_details_restart(|| with_session(|s| s.details_play(Start::Beginning)));
     app.on_details_back(|| with_session(|s| s.details_back()));
     app.on_details_season_selected(|i| with_session(|s| s.details_season_selected(i)));
     app.on_cycle_audio(|| with_session(|s| playback::next_audio(&s.engine)));
@@ -232,6 +248,21 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
         .start(TimerMode::Repeated, GUIDE_TICK, || {
             with_session(|s| s.tick_guide());
         });
+}
+
+/// Saves what is left to save before the window closes: the progress of
+/// the title playing.
+pub fn finish() {
+    with_session(|s| s.save_progress());
+}
+
+/// Where a title starts playing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Start {
+    /// Where it was left, when far enough in and not finished.
+    Resume,
+    /// From the beginning.
+    Beginning,
 }
 
 /// Runs `f` with the session, if the window still has one.
@@ -250,6 +281,15 @@ fn on_ui_thread(f: impl FnOnce(&Rc<Session>) + Send + 'static) {
 
 // Helpers
 impl Session {
+    /// Loads `url` in mpv, starting `start` seconds in, or at the start.
+    /// mpv's `start` option applies to every later load, so it is set (or
+    /// cleared) before each one.
+    fn load(&self, url: &str, start: Option<f64>) -> mpv_engine::Result<()> {
+        let start = start.map_or_else(|| "none".to_owned(), |s| format!("{s:.1}"));
+        self.engine.set_property("start", start.as_str())?;
+        self.engine.load(url)
+    }
+
     fn show(&self, screen: Screen) {
         if let Some(app) = self.app.upgrade() {
             app.set_screen(screen);

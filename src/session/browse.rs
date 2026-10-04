@@ -150,7 +150,7 @@ impl Session {
             return app.set_video_note("Connecting to the provider…".into());
         };
         let url = credentials.live_url(stream.id, source.library.account.preferred_format());
-        match self.engine.load(&url) {
+        match self.load(&url, None) {
             Ok(()) => {
                 app.set_video_note("Tuning…".into());
                 app.set_provider_name(source.name.as_str().into());
