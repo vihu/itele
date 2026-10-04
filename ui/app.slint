@@ -86,6 +86,7 @@ export component AppWindow inherits Window {
     in property <string> avatar;
     callback group-selected(int);
     callback channel-selected(int);
+    callback rows-visible(int, int);
 
     // Playback.
     in property <image> frame;
@@ -208,6 +209,9 @@ export component AppWindow inherits Window {
             }
             switch-clicked => {
                 switcher.show();
+            }
+            rows-visible(first, count) => {
+                root.rows-visible(first, count);
             }
         }
     }

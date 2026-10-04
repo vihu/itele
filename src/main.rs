@@ -7,6 +7,7 @@
 
 mod info;
 mod live;
+mod logos;
 mod playback;
 mod session;
 mod video;

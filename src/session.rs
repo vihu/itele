@@ -18,11 +18,12 @@ use std::time::{Duration, Instant};
 use itele::provider::{Library, Paths, Provider};
 use itele::xtream::{Credentials, LiveStream};
 use mpv_engine::{EndReason, Engine, PlaybackEvent};
-use slint::{ComponentHandle, SharedString, Timer};
+use slint::{ComponentHandle, SharedString, Timer, VecModel};
 
 use crate::live::{Catalog, View, thousands};
+use crate::logos::Logos;
 use crate::playback::{self, SEEK_STEP, VOLUME_STEP};
-use crate::ui::{AppWindow, Screen};
+use crate::ui::{AppWindow, ChannelItem, Screen};
 
 /// Delay before the preview follows the selection, so holding Down does
 /// not open a stream per row.
@@ -42,6 +43,7 @@ pub struct Session {
     paths: Paths,
     engine: Arc<Engine>,
     state: RefCell<State>,
+    logos: RefCell<Logos>,
     select_timer: Timer,
     banner_timer: Timer,
     banner_until: Cell<Instant>,
@@ -53,6 +55,10 @@ struct State {
     slots: Vec<Slot>,
     catalog: Catalog,
     group: usize,
+    /// The rows of the channel list, updated in place as logos arrive.
+    channels: Rc<VecModel<ChannelItem>>,
+    /// Each row's logo URL, empty when the provider has none.
+    row_logos: Vec<String>,
     playing: Option<Playing>,
     /// Source of [`Slot::epoch`] values.
     next_epoch: u64,
@@ -79,11 +85,15 @@ struct Playing {
 /// screen when there are none.
 pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
     engine.set_wakeup_callback(drain_events(Arc::downgrade(&engine), app.as_weak()));
+    let logos = Logos::start(paths.logos_dir(), |url, path| {
+        on_ui_thread(move |s| s.logo_ready(url, path));
+    });
     let session = Rc::new(Session {
         app: app.as_weak(),
         paths,
         engine,
         state: RefCell::default(),
+        logos: RefCell::new(logos),
         select_timer: Timer::default(),
         banner_timer: Timer::default(),
         banner_until: Cell::new(Instant::now()),
@@ -98,6 +108,7 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
     app.on_view_selected(|i| with_session(|s| s.select_view(i)));
     app.on_group_selected(|i| with_session(|s| s.select_group(i.max(0) as usize)));
     app.on_channel_selected(|i| with_session(|s| s.select_channel(i)));
+    app.on_rows_visible(|first, count| with_session(|s| s.rows_visible(first, count)));
     app.on_watch(|| with_session(|s| s.watch()));
     app.on_back(|| with_session(|s| s.back()));
     app.on_zap(|delta| with_session(|s| s.zap(delta)));

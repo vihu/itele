@@ -162,6 +162,11 @@ impl Paths {
         }
     }
 
+    /// Where downloaded channel logos are kept, shared by all providers.
+    pub fn logos_dir(&self) -> Utf8PathBuf {
+        self.cache.join("logos")
+    }
+
     /// The cache for `provider`.
     pub fn cache(&self, provider: &Provider) -> Cache {
         Cache {

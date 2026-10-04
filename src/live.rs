@@ -155,6 +155,18 @@ impl Catalog {
         Some((source, source.library.streams.get(*g.channels.get(row)?)?))
     }
 
+    /// Each row's logo URL in `group`, empty when the provider has none.
+    pub fn row_logos(&self, group: usize) -> Vec<String> {
+        let Some(g) = self.groups.get(group) else {
+            return Vec::new();
+        };
+        let streams = &self.sources[g.source].library.streams;
+        g.channels
+            .iter()
+            .map(|&i| streams[i].icon.clone().unwrap_or_default())
+            .collect()
+    }
+
     /// The row of a provider's channel in `group`, if the group lists it.
     pub fn row_of(&self, group: usize, provider: &str, stream: StreamId) -> Option<usize> {
         let g = self.groups.get(group)?;

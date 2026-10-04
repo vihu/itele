@@ -10,6 +10,9 @@ version      = "0.1.0"
 [dependencies]
 camino           = "1.2"
 directories      = "6"
+# Slint decodes images with this crate; listed only to add WebP and GIF,
+# which some providers use for channel logos.
+image            = { version = "0.25", default-features = false, features = ["gif", "webp"] }
 jiff             = "0.2"
 # Secret Service on Linux, Keychain on macOS.
 keyring          = "4.2.0"

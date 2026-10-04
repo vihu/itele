@@ -1,8 +1,15 @@
 //! The Live TV lists: picking a group or a channel, and starting playback.
 
-use slint::{ModelRc, TimerMode, VecModel};
+use std::rc::Rc;
+
+use camino::Utf8PathBuf;
+use slint::{Image, Model, ModelRc, TimerMode, VecModel};
 
 use super::{Playing, SELECT_DELAY, Session, State, with_session};
+
+/// Rows asked for logos when a group opens, before the list reports what
+/// it shows.
+const FIRST_ROWS: i32 = 16;
 
 impl Session {
     pub(super) fn select_group(&self, group: usize) {
@@ -13,15 +20,71 @@ impl Session {
         let group = group.min(state.catalog.group_count().saturating_sub(1));
         app.set_group_index(group as i32);
         app.set_group_title(state.catalog.group_name(group).into());
-        app.set_channels(ModelRc::new(VecModel::from(
-            state.catalog.channel_items(group),
-        )));
+        let row_logos = state.catalog.row_logos(group);
+        let mut items = state.catalog.channel_items(group);
+        {
+            let logos = self.logos.borrow();
+            for (item, url) in items.iter_mut().zip(&row_logos) {
+                if let Some(logo) = logos.get(url) {
+                    item.logo = logo;
+                    item.has_logo = true;
+                }
+            }
+        }
+        let channels = Rc::new(VecModel::from(items));
+        app.set_channels(ModelRc::from(Rc::clone(&channels)));
         let row = state
             .playing
             .as_ref()
             .and_then(|p| state.catalog.row_of(group, &p.provider, p.stream.id));
         app.set_channel_index(row.map_or(-1, |r| r as i32));
         state.group = group;
+        state.channels = channels;
+        state.row_logos = row_logos;
+        drop(state);
+        self.rows_visible(row.map_or(0, |r| r as i32 - FIRST_ROWS / 2), FIRST_ROWS);
+    }
+
+    /// Asks for the logos of rows `first` to `first + count`.
+    pub(super) fn rows_visible(&self, first: i32, count: i32) {
+        let first = first.max(0) as usize;
+        let urls: Vec<String> = {
+            let state = self.state.borrow();
+            let end = (first + count.max(0) as usize).min(state.row_logos.len());
+            state.row_logos.get(first..end).unwrap_or_default().to_vec()
+        };
+        for url in urls {
+            if self.logos.borrow_mut().request(&url) {
+                // Already on disk: loaded now.
+                if let Some(image) = self.logos.borrow().get(&url) {
+                    self.show_logo(&url, image);
+                }
+            }
+        }
+    }
+
+    /// A logo download finished; shows it on every row that uses it.
+    pub(super) fn logo_ready(&self, url: String, path: Option<Utf8PathBuf>) {
+        let image = self.logos.borrow_mut().finish(url.clone(), path);
+        if let Some(image) = image {
+            self.show_logo(&url, image);
+        }
+    }
+
+    fn show_logo(&self, url: &str, image: Image) {
+        let state = self.state.borrow();
+        for (row, _) in state
+            .row_logos
+            .iter()
+            .enumerate()
+            .filter(|(_, u)| *u == url)
+        {
+            if let Some(mut item) = state.channels.row_data(row) {
+                item.logo = image.clone();
+                item.has_logo = true;
+                state.channels.set_row_data(row, item);
+            }
+        }
     }
 
     pub(super) fn select_channel(&self, row: i32) {

@@ -247,6 +247,13 @@ export component LiveTvScreen inherits Rectangle {
     callback watch();
     callback settings-clicked();
     callback switch-clicked();
+    // Rows `first` to `first + count` are on screen, for lazy logos.
+    callback rows-visible(int, int);
+
+    property <int> first-visible: floor(-list.content-y / 74px);
+    changed first-visible => {
+        root.rows-visible(root.first-visible, ceil(list.visible-height / 74px) + 1);
+    }
 
     property <ChannelItem> current: root.channel-index >= 0 && root.channel-index < root.channels.length ? root.channels[root.channel-index] : { name: "" };
 
