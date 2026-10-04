@@ -32,6 +32,8 @@ pub enum Size {
     Poster,
     /// A detail page's wide background.
     Backdrop,
+    /// An episode still in a list.
+    Still,
 }
 
 /// A decoded picture, ready to become a Slint image on the UI thread.
@@ -103,6 +105,7 @@ impl Size {
         match self {
             Size::Poster => (320, 480),
             Size::Backdrop => (1600, 900),
+            Size::Still => (448, 252),
         }
     }
 }

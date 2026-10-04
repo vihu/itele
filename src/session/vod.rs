@@ -175,22 +175,33 @@ impl Session {
         let Ok(index) = usize::try_from(index) else {
             return;
         };
-        let movie = {
+        let (movie, show) = {
             let state = self.state.borrow();
             let Some(kind) = state.browse.kind else {
                 return;
             };
             let group = state.browse.groups[kind.index()];
             match kind {
-                Kind::Movies => state
-                    .movies
-                    .title(group, index)
-                    .map(|(source, movie)| (source.id.clone(), movie.clone())),
-                Kind::Series => None,
+                Kind::Movies => (
+                    state
+                        .movies
+                        .title(group, index)
+                        .map(|(source, movie)| (source.id.clone(), movie.clone())),
+                    None,
+                ),
+                Kind::Series => (
+                    None,
+                    state
+                        .shows
+                        .title(group, index)
+                        .map(|(source, show)| (source.id.clone(), show.clone())),
+                ),
             }
         };
         if let Some((provider, movie)) = movie {
             self.open_movie(provider, movie);
+        } else if let Some((provider, show)) = show {
+            self.open_show(provider, show);
         }
     }
 

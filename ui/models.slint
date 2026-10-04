@@ -139,4 +139,26 @@ export struct TitleDetails {
     note: string,
     // Where the back button goes, for example "Movies".
     back-label: string,
+    // The main button, for example "Play" or "Play S1 E1".
+    play-label: string,
+}
+
+// A season tab on a series' page.
+export struct SeasonItem {
+    name: string,
+    // Episodes in it, for example "10".
+    count: string,
+}
+
+// An episode in a series' list.
+export struct EpisodeItem {
+    number: string,
+    title: string,
+    plot: string,
+    // For example "24 min"; empty when unknown.
+    duration: string,
+    still: image,
+    has-still: bool,
+    // For example "S2 E4".
+    code: string,
 }

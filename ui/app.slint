@@ -12,9 +12,9 @@ import { ProviderItem } from "models.slint";
 import { SearchItem, SearchScreen } from "search.slint";
 import { ProvidersPanel, SwitcherPanel } from "popups.slint";
 import { PosterItem, VodScreen } from "vod.slint";
-import { DetailsScreen, TitleDetails } from "details.slint";
+import { DetailsScreen, EpisodeItem, SeasonItem, TitleDetails } from "details.slint";
 
-export { ChannelItem, GroupItem, ProviderItem, SearchItem, GuideCell, GuideDetails, GuideRow, GuideTick, InfoLine, InfoPair, PlayerState, PosterItem, ProgrammeInfo, TitleDetails, UpcomingItem }
+export { ChannelItem, GroupItem, ProviderItem, SearchItem, GuideCell, GuideDetails, GuideRow, GuideTick, EpisodeItem, InfoLine, InfoPair, PlayerState, PosterItem, ProgrammeInfo, SeasonItem, TitleDetails, UpcomingItem }
 
 export enum Screen { login, live, guide, search, movies, series, details, player }
 
@@ -112,8 +112,19 @@ export component AppWindow inherits Window {
     in property <TitleDetails> details;
     // The rail item the page belongs to: 3 movies, 4 series.
     in property <int> details-rail: 3;
+    in property <bool> details-series;
+    in property <[SeasonItem]> details-seasons;
+    in property <int> details-season-index;
+    in property <[EpisodeItem]> details-episodes;
+    in-out property <int> details-episode-index;
     callback details-play();
     callback details-back();
+    callback details-season-selected(int);
+
+    // Scrolls a series' page to the selected season and episode.
+    public function reveal-episode() {
+        details-screen.reveal-episode();
+    }
 
     // Playback.
     in property <image> frame;
@@ -341,8 +352,16 @@ export component AppWindow inherits Window {
         details: root.details;
         avatar: root.avatar;
         rail-active: root.details-rail;
+        series: root.details-series;
+        seasons: root.details-seasons;
+        season-index: root.details-season-index;
+        episodes: root.details-episodes;
+        episode-index <=> root.details-episode-index;
         play => {
             root.details-play();
+        }
+        season-selected(i) => {
+            root.details-season-selected(i);
         }
         back => {
             root.details-back();

@@ -14,6 +14,7 @@ mod guide;
 mod player;
 mod providers;
 mod search;
+mod series;
 mod timefmt;
 mod vod;
 
@@ -221,6 +222,7 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
     app.on_vod_open(|i| with_session(|s| s.vod_open(i)));
     app.on_details_play(|| with_session(|s| s.details_play()));
     app.on_details_back(|| with_session(|s| s.details_back()));
+    app.on_details_season_selected(|i| with_session(|s| s.details_season_selected(i)));
     app.on_cycle_audio(|| with_session(|s| playback::next_audio(&s.engine)));
     app.on_cycle_subtitles(|| with_session(|s| playback::next_subtitles(&s.engine)));
 
