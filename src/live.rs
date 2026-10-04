@@ -8,7 +8,7 @@ use itele::provider::Library;
 use itele::xtream::{LiveStream, StreamId};
 use slint::{Image, SharedString};
 
-use crate::names::{short_name, thousands, tint};
+use crate::names::{search_rank, short_name, thousands, tint};
 use crate::ui::{ChannelItem, GroupItem};
 
 /// Name of the group that lists every channel of a provider.
@@ -208,23 +208,12 @@ impl Catalog {
     /// word that does, then the rest; shorter names first within each.
     pub fn search_channels(&self, query: &str, limit: usize) -> Vec<ChannelHit<'_>> {
         let query = query.trim().to_lowercase();
-        let words: Vec<&str> = query.split_whitespace().collect();
-        if words.is_empty() {
-            return Vec::new();
-        }
         let mut hits: Vec<(u8, usize, ChannelHit<'_>)> = Vec::new();
         for source in &self.sources {
             for stream in &source.library.streams {
                 let name = stream.name.to_lowercase();
-                if !words.iter().all(|w| name.contains(w)) {
+                let Some(rank) = search_rank(&name, &query) else {
                     continue;
-                }
-                let rank = if name.starts_with(&query) {
-                    0
-                } else if name.split_whitespace().any(|w| w.starts_with(words[0])) {
-                    1
-                } else {
-                    2
                 };
                 let category = stream
                     .category_id

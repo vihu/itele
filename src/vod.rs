@@ -12,7 +12,7 @@ use itele::xtream::{CategoryId, Movie, Show};
 use slint::{Image, SharedString};
 
 use crate::live::View;
-use crate::names::{thousands, tint};
+use crate::names::{search_rank, thousands, tint};
 use crate::ui::{GroupItem, PosterItem};
 
 /// What the screens need from a movie or a series.
@@ -76,6 +76,14 @@ pub struct Source<T> {
     pub shelf: Shelf<T>,
 }
 
+/// A title found by name.
+pub struct TitleHit<'a, T> {
+    /// The title's provider.
+    pub source: &'a Source<T>,
+    /// The title.
+    pub title: &'a T,
+}
+
 struct Group {
     source: usize,
     name: String,
@@ -101,6 +109,27 @@ impl<T: Tile> Catalog<T> {
             None => self.sources.push(source),
         }
         self.regroup();
+    }
+
+    /// Titles whose name contains every word of `query`, across every
+    /// loaded provider, best matches first and shorter names first within
+    /// each.
+    pub fn search(&self, query: &str, limit: usize) -> Vec<TitleHit<'_, T>> {
+        let query = query.trim().to_lowercase();
+        let mut hits: Vec<(u8, usize, TitleHit<'_, T>)> = Vec::new();
+        for source in &self.sources {
+            for title in &source.shelf.titles {
+                let name = title.name().to_lowercase();
+                if let Some(rank) = search_rank(&name, &query) {
+                    hits.push((rank, name.len(), TitleHit { source, title }));
+                }
+            }
+        }
+        hits.sort_by_key(|(rank, len, _)| (*rank, *len));
+        hits.into_iter()
+            .take(limit)
+            .map(|(_, _, hit)| hit)
+            .collect()
     }
 
     /// The provider and title at `index` of `group`.
@@ -385,5 +414,30 @@ mod tests {
         catalog.remove("north");
         assert_eq!(names(&catalog), ["All movies", "Action"]);
         assert_eq!(catalog.count_of("north"), None);
+    }
+
+    #[test]
+    fn search_finds_titles_across_providers() {
+        let mut catalog = Catalog::default();
+        catalog.upsert(source("north", NORTH));
+        catalog.upsert(source(
+            "south",
+            r#"[{"name":"Fury Road","stream_id":1},{"name":"The Fury","stream_id":2}]"#,
+        ));
+        let found: Vec<_> = catalog
+            .search("fury", 10)
+            .iter()
+            .map(|h| (h.source.id.as_str(), h.title.name.as_str()))
+            .collect();
+        assert_eq!(
+            found,
+            [
+                ("south", "Fury Road"),
+                ("south", "The Fury"),
+                ("north", "Red Fury (2025)")
+            ]
+        );
+        assert_eq!(catalog.search("fury", 1).len(), 1);
+        assert!(catalog.search(" ", 10).is_empty());
     }
 }

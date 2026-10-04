@@ -1,18 +1,23 @@
-//! Search across every provider: channels by name, programmes by title.
-//! Enter plays a channel, the channel of a programme that is on now, or an
-//! ended programme from catch-up.
+//! Search across every provider: channels by name, movies and series by
+//! title, programmes by title. Enter plays a channel, the channel of a
+//! programme that is on now, or an ended programme from catch-up, and opens
+//! the page of a movie or series.
 
+use std::rc::Rc;
 use std::time::Duration;
 
 use itele::epg::Programme;
-use itele::xtream::StreamId;
-use slint::{ModelRc, SharedString, TimerMode, VecModel};
+use itele::xtream::{Movie, Show, StreamId};
+use slint::{Image, Model, ModelRc, SharedString, TimerMode, VecModel};
 
 use super::catchup::replayable;
 use super::timefmt::{day_time, now, when};
+use super::vod::Kind;
 use super::{Session, with_session};
+use crate::art::Size;
 use crate::names::{short_name, tint};
 use crate::ui::{Screen, SearchItem};
+use crate::vod::{Tile, TitleHit};
 
 /// Pause after the last keystroke before searching.
 const DEBOUNCE: Duration = Duration::from_millis(200);
@@ -20,11 +25,17 @@ const DEBOUNCE: Duration = Duration::from_millis(200);
 const CHANNEL_LIMIT: usize = 8;
 /// Programmes listed at most.
 const PROGRAMME_LIMIT: usize = 40;
+/// Movies, and series, listed at most.
+const TITLE_LIMIT: usize = 8;
 
-/// What each result row leads to.
+/// What each result row leads to, and the rows, which take posters as
+/// they arrive.
 #[derive(Default)]
 pub(super) struct Search {
     targets: Vec<Target>,
+    items: Rc<VecModel<SearchItem>>,
+    /// Each row's poster URL; empty for rows without one.
+    posters: Vec<String>,
 }
 
 enum Target {
@@ -40,10 +51,22 @@ enum Target {
         live: bool,
         replay: bool,
     },
+    Movie {
+        provider: String,
+        movie: Movie,
+    },
+    Show {
+        provider: String,
+        show: Show,
+    },
 }
 
 impl Session {
     pub(super) fn open_search(&self) {
+        // Movies and series are searched once loaded, which starts here if
+        // their screens were not visited yet.
+        self.load_shelves(Kind::Movies);
+        self.load_shelves(Kind::Series);
         self.show(Screen::Search);
         self.run_search();
     }
@@ -64,6 +87,7 @@ impl Session {
         let now = now();
         let mut items = Vec::new();
         let mut targets = Vec::new();
+        let mut posters = Vec::new();
         if !query.is_empty() {
             let state = self.state.borrow();
             let mut logos = self.logos.borrow_mut();
@@ -99,6 +123,36 @@ impl Session {
                 targets.push(Target::Channel {
                     provider: hit.source.id.clone(),
                     stream: hit.stream.id,
+                });
+            }
+            posters.resize(items.len(), String::new());
+
+            let movies = state.movies.search(&query, TITLE_LIMIT);
+            if !movies.is_empty() {
+                items.push(heading("Movies"));
+                targets.push(Target::Heading);
+                posters.push(String::new());
+            }
+            for hit in movies {
+                items.push(title_item(&hit, "Movie"));
+                posters.push(hit.title.poster().unwrap_or("").to_owned());
+                targets.push(Target::Movie {
+                    provider: hit.source.id.clone(),
+                    movie: hit.title.clone(),
+                });
+            }
+            let shows = state.shows.search(&query, TITLE_LIMIT);
+            if !shows.is_empty() {
+                items.push(heading("Series"));
+                targets.push(Target::Heading);
+                posters.push(String::new());
+            }
+            for hit in shows {
+                items.push(title_item(&hit, "Series"));
+                posters.push(hit.title.poster().unwrap_or("").to_owned());
+                targets.push(Target::Show {
+                    provider: hit.source.id.clone(),
+                    show: hit.title.clone(),
                 });
             }
 
@@ -156,10 +210,23 @@ impl Session {
             .iter()
             .position(|t| !matches!(t, Target::Heading))
             .map_or(-1, |i| i as i32);
+        posters.resize(items.len(), String::new());
+        let items = Rc::new(VecModel::from(items));
         app.set_search_note(note.into());
-        app.set_search_items(ModelRc::new(VecModel::from(items)));
+        app.set_search_items(ModelRc::from(Rc::clone(&items)));
         app.set_search_index(index);
-        self.state.borrow_mut().search.targets = targets;
+        {
+            let mut art = self.art.borrow_mut();
+            for url in posters.iter().filter(|u| !u.is_empty()) {
+                art.request(url, Size::Poster);
+            }
+        }
+        {
+            let search = &mut self.state.borrow_mut().search;
+            search.targets = targets;
+            search.items = items;
+            search.posters = posters;
+        }
         app.invoke_reveal_search_row();
     }
 
@@ -186,9 +253,47 @@ impl Session {
         app.invoke_reveal_search_row();
     }
 
+    /// Shows a poster that arrived on every result row that uses it.
+    pub(super) fn show_search_poster(&self, url: &str, image: &Image) {
+        let state = self.state.borrow();
+        let search = &state.search;
+        for (row, _) in search.posters.iter().enumerate().filter(|(_, u)| *u == url) {
+            if let Some(mut item) = search.items.row_data(row) {
+                item.logo = image.clone();
+                item.has_logo = true;
+                search.items.set_row_data(row, item);
+            }
+        }
+    }
+
     /// Enter or a click: plays a channel, a programme's channel when the
-    /// programme is on now, or the programme from catch-up when it ended.
+    /// programme is on now, or the programme from catch-up when it ended;
+    /// opens the page of a movie or series.
     pub(super) fn search_picked(&self, index: i32) {
+        let title = {
+            let state = self.state.borrow();
+            match usize::try_from(index)
+                .ok()
+                .and_then(|i| state.search.targets.get(i))
+            {
+                Some(Target::Movie { provider, movie }) => {
+                    Some((provider.clone(), Some(movie.clone()), None))
+                }
+                Some(Target::Show { provider, show }) => {
+                    Some((provider.clone(), None, Some(show.clone())))
+                }
+                _ => None,
+            }
+        };
+        match title {
+            Some((provider, Some(movie), _)) => {
+                return self.open_movie(provider, movie, Screen::Search);
+            }
+            Some((provider, None, Some(show))) => {
+                return self.open_show(provider, show, Screen::Search);
+            }
+            _ => {}
+        }
         let chosen = {
             let state = self.state.borrow();
             usize::try_from(index)
@@ -209,7 +314,10 @@ impl Session {
                         replay: true,
                         ..
                     } => Some((provider.clone(), *stream, Some(programme.clone()))),
-                    Target::Heading | Target::Programme { .. } => None,
+                    Target::Heading
+                    | Target::Programme { .. }
+                    | Target::Movie { .. }
+                    | Target::Show { .. } => None,
                 })
         };
         let Some((provider, stream, programme)) = chosen else {
@@ -248,6 +356,30 @@ impl Session {
         self.refresh_programme();
         app.invoke_reveal_current();
         true
+    }
+}
+
+/// A movie or series row: `kind` names which, beside the year and, the
+/// provider.
+fn title_item<T: Tile>(hit: &TitleHit<'_, T>, kind: &str) -> SearchItem {
+    let year = hit.title.year().map(|y| y.to_string());
+    let subtitle = [Some(kind.to_owned()), year, Some(hit.source.name.clone())]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join(" · ");
+    SearchItem {
+        kind: 3,
+        title: hit.title.name().into(),
+        subtitle: subtitle.into(),
+        detail: hit
+            .title
+            .rating()
+            .map(|r| format!("{r:.1} / 10").into())
+            .unwrap_or_default(),
+        short: short_name(hit.title.name()).into(),
+        tint: tint(hit.title.name()),
+        ..SearchItem::default()
     }
 }
 

@@ -148,6 +148,7 @@ impl Session {
         };
         if size == Size::Poster {
             self.show_poster(&url, &image);
+            self.show_search_poster(&url, &image);
         }
         self.page_art_ready(&url, size, &image);
     }
@@ -181,9 +182,9 @@ impl Session {
             }
         };
         if let Some((provider, movie)) = movie {
-            self.open_movie(provider, movie);
+            self.open_movie(provider, movie, Kind::Movies.screen());
         } else if let Some((provider, show)) = show {
-            self.open_show(provider, show);
+            self.open_show(provider, show, Kind::Series.screen());
         }
     }
 

@@ -13,11 +13,11 @@ use super::page::{Feature, Page, Subject, loading_note};
 use super::timefmt::{minutes_left, runtime};
 use super::{Session, on_ui_thread};
 use crate::art::Size;
-use crate::ui::{EpisodeItem, ProgrammeInfo, SeasonItem};
+use crate::ui::{EpisodeItem, ProgrammeInfo, Screen, SeasonItem};
 
 impl Session {
-    /// Opens the page of `provider`'s `show`.
-    pub(super) fn open_show(&self, provider: String, show: Show) {
+    /// Opens the page of `provider`'s `show`, from the `origin` screen.
+    pub(super) fn open_show(&self, provider: String, show: Show, origin: Screen) {
         let Some((token, credentials, account)) = self.begin_page(&provider) else {
             return;
         };
@@ -40,7 +40,13 @@ impl Session {
             last,
             targeted: false,
         };
-        self.show_page(Page::new(token, provider, subject, loading_note(loading)));
+        self.show_page(Page::new(
+            token,
+            provider,
+            subject,
+            loading_note(loading),
+            origin,
+        ));
         self.fill_season(0);
         thread::spawn(move || {
             let result = credentials

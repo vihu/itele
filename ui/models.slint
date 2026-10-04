@@ -91,9 +91,10 @@ export struct ProviderItem {
     status: string,
 }
 
-// A search result: a channel, a programme, or a section heading.
+// A search result: a channel, a programme, a section heading, or a movie
+// or series (whose logo is its poster).
 export struct SearchItem {
-    // 0 channel, 1 programme, 2 heading.
+    // 0 channel, 1 programme, 2 heading, 3 movie or series.
     kind: int,
     title: string,
     subtitle: string,

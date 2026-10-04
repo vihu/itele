@@ -17,8 +17,8 @@ use crate::art::Size;
 use crate::ui::Screen;
 
 impl Session {
-    /// Opens the page of `provider`'s `movie`.
-    pub(super) fn open_movie(&self, provider: String, movie: Movie) {
+    /// Opens the page of `provider`'s `movie`, from the `origin` screen.
+    pub(super) fn open_movie(&self, provider: String, movie: Movie, origin: Screen) {
         let Some((token, credentials, account)) = self.begin_page(&provider) else {
             return;
         };
@@ -36,7 +36,13 @@ impl Session {
             info,
             progress,
         };
-        self.show_page(Page::new(token, provider, subject, loading_note(loading)));
+        self.show_page(Page::new(
+            token,
+            provider,
+            subject,
+            loading_note(loading),
+            origin,
+        ));
         thread::spawn(move || {
             let result = credentials
                 .map_or_else(|| account.credentials(), Ok)
@@ -51,12 +57,14 @@ impl Session {
         let Some(app) = self.app.upgrade() else {
             return;
         };
-        let Some(kind) = self.state.borrow_mut().page.take().map(|p| p.kind()) else {
+        let Some(origin) = self.state.borrow_mut().page.take().map(|p| p.origin) else {
             return;
         };
-        self.show(kind.screen());
-        self.apply_progress();
-        app.invoke_reveal_vod();
+        self.show(origin);
+        if matches!(origin, Screen::Movies | Screen::Series) {
+            self.apply_progress();
+            app.invoke_reveal_vod();
+        }
     }
 
     /// Plays the page's movie, or the selected episode of its series,

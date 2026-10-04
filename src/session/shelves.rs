@@ -77,6 +77,13 @@ impl Session {
         if self.state.borrow().browse.kind == Some(kind) {
             self.refresh_vod();
         }
+        if self
+            .app
+            .upgrade()
+            .is_some_and(|app| app.get_screen() == crate::ui::Screen::Search)
+        {
+            self.run_search();
+        }
     }
 
     fn shelf_failed(&self, kind: Kind, id: &str, epoch: u64, error: &str) {

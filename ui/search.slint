@@ -29,13 +29,34 @@ component ResultRow inherits Rectangle {
         padding-left: 12px;
         padding-right: 16px;
         spacing: 16px;
-        VerticalLayout {
+        if root.item.kind != 3: VerticalLayout {
             alignment: center;
             ChannelLogo {
                 short: root.item.short;
                 tint: root.item.tint;
                 logo: root.item.logo;
                 has-logo: root.item.has-logo;
+            }
+        }
+        // A poster, in the logo's width.
+        if root.item.kind == 3: HorizontalLayout {
+            width: 56px;
+            alignment: center;
+            VerticalLayout {
+                alignment: center;
+                Rectangle {
+                    width: 32px;
+                    height: 48px;
+                    border-radius: 4px;
+                    clip: true;
+                    background: @linear-gradient(180deg, root.item.tint 0%, Theme.surface-1 100%);
+                    if root.item.has-logo: Image {
+                        width: 100%;
+                        height: 100%;
+                        source: root.item.logo;
+                        image-fit: cover;
+                    }
+                }
             }
         }
         VerticalLayout {
@@ -181,7 +202,7 @@ export component SearchScreen inherits Rectangle {
                             if root.query == "": Text {
                                 x: 0;
                                 height: parent.height;
-                                text: "Channels and programmes, across all providers";
+                                text: "Channels, movies, series and programmes, across all providers";
                                 color: Theme.text-3;
                                 font-size: Theme.fs-lg;
                                 vertical-alignment: center;

@@ -1,5 +1,5 @@
-//! Channel names as the screens draw them: the short name on a fallback
-//! logo tile, a stable tile colour, and grouped digits.
+//! Names as the screens draw and find them: the short name on a fallback
+//! logo tile, a stable tile colour, grouped digits, and search ranking.
 
 use slint::Color;
 
@@ -60,6 +60,24 @@ pub fn thousands(n: usize) -> String {
     out
 }
 
+/// How well `name` matches a search: `None` unless it contains every word
+/// of `query` (both lowercased); then 0 when it starts with the query, 1
+/// when a word starts with its first word, and 2 otherwise.
+pub fn search_rank(name: &str, query: &str) -> Option<u8> {
+    let mut words = query.split_whitespace();
+    let first = words.next()?;
+    if !query.split_whitespace().all(|w| name.contains(w)) {
+        return None;
+    }
+    Some(if name.starts_with(query) {
+        0
+    } else if name.split_whitespace().any(|w| w.starts_with(first)) {
+        1
+    } else {
+        2
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -79,6 +97,15 @@ mod tests {
         );
         assert_eq!(short_name("A"), "A");
         assert_eq!(short_name(""), "");
+    }
+
+    #[test]
+    fn search_rank_orders_prefixes_then_word_starts() {
+        assert_eq!(search_rank("sports extra", "sports"), Some(0));
+        assert_eq!(search_rank("volt sports 1", "sports"), Some(1));
+        assert_eq!(search_rank("esports arena", "sports"), Some(2));
+        assert_eq!(search_rank("volt sports 1", "volt 2"), None);
+        assert_eq!(search_rank("anything", "  "), None);
     }
 
     #[test]

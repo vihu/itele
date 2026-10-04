@@ -12,7 +12,7 @@ use super::timefmt::{minutes_left, runtime};
 use super::vod::Kind;
 use crate::art::Size;
 use crate::names::tint;
-use crate::ui::{EpisodeItem, ProgrammeInfo, TitleDetails};
+use crate::ui::{EpisodeItem, ProgrammeInfo, Screen, TitleDetails};
 
 /// The page showing.
 pub(super) struct Page {
@@ -24,6 +24,8 @@ pub(super) struct Page {
     backdrop: Option<Image>,
     /// Shown while details load, or when they fail.
     pub(super) note: String,
+    /// The screen the page was opened from, which Back returns to.
+    pub(super) origin: Screen,
 }
 
 /// What the page is about, with the provider's details once known.
@@ -64,8 +66,15 @@ pub(super) struct Feature {
 }
 
 impl Page {
-    /// A new page about `subject`, without pictures yet.
-    pub(super) fn new(token: u64, provider: String, subject: Subject, note: String) -> Self {
+    /// A new page about `subject`, opened from `origin`, without pictures
+    /// yet.
+    pub(super) fn new(
+        token: u64,
+        provider: String,
+        subject: Subject,
+        note: String,
+        origin: Screen,
+    ) -> Self {
         Self {
             token,
             provider,
@@ -73,6 +82,7 @@ impl Page {
             poster: None,
             backdrop: None,
             note,
+            origin,
         }
     }
 
@@ -199,7 +209,12 @@ impl Page {
             has_backdrop: self.backdrop.is_some(),
             backdrop: self.backdrop.clone().unwrap_or_default(),
             note: self.note.as_str().into(),
-            back_label: back_label.into(),
+            back_label: if self.origin == Screen::Search {
+                "Search"
+            } else {
+                back_label
+            }
+            .into(),
             play_label: if resume.is_some() { "Resume" } else { "Play" }.into(),
             left: resume
                 .map(|p| minutes_left(p.left() as i64))
