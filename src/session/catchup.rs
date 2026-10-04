@@ -3,7 +3,7 @@
 use itele::epg::Programme;
 
 use super::timefmt::{clock, day_time, now};
-use super::{Playing, Session, State};
+use super::{Content, Playing, Session, State};
 use crate::ui::ProgrammeInfo;
 
 /// Seconds in a day, for the archive window.
@@ -75,24 +75,11 @@ impl Session {
             });
             *playing = Some(Playing {
                 provider: source.id.clone(),
-                stream: stream.clone(),
-                replay: Some(programme),
+                content: Content::Replay(stream.clone(), programme),
             });
         }
         self.select_timer.stop();
         self.enter_player();
-    }
-
-    /// Whether mpv is playing a programme from catch-up.
-    pub(super) fn replaying(&self) -> bool {
-        self.replay_length().is_some()
-    }
-
-    /// The length in seconds of the programme being replayed, if any.
-    pub(super) fn replay_length(&self) -> Option<f64> {
-        let state = self.state.borrow();
-        let replay = state.playing.as_ref()?.replay.as_ref()?;
-        Some((replay.stop - replay.start) as f64)
     }
 }
 

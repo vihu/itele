@@ -119,3 +119,24 @@ export struct PosterItem {
     poster: image,
     has-poster: bool,
 }
+
+// The detail page of a movie or a series.
+export struct TitleDetails {
+    title: string,
+    // For example "2024 · 1 h 34 min · Comedy, Family".
+    meta: string,
+    // Out of 10, for example "7.8"; empty when unrated.
+    rating: string,
+    plot: string,
+    // For example "With Ana Dimas, Teo Larsen · Directed by Ida Sund".
+    credits: string,
+    tint: color,
+    poster: image,
+    has-poster: bool,
+    backdrop: image,
+    has-backdrop: bool,
+    // Shown while details load, or when they fail.
+    note: string,
+    // Where the back button goes, for example "Movies".
+    back-label: string,
+}

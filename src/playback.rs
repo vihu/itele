@@ -1,5 +1,6 @@
-//! The live player's controls and what its banner shows: pause, the
-//! timeshift window in mpv's cache, volume, and audio and subtitle tracks.
+//! The player's controls and what its banner shows: pause, the timeline
+//! (the timeshift window in mpv's cache, a catch-up programme, or a whole
+//! title), volume, and audio and subtitle tracks.
 //!
 //! mpv returns node properties (`track-list`, `demuxer-cache-state`) as JSON
 //! when read as strings, which is how they are parsed here.
@@ -19,12 +20,27 @@ pub const VOLUME_STEP: f64 = 5.0;
 /// Jump for the seek keys and buttons, in seconds.
 pub const SEEK_STEP: f64 = 10.0;
 
-/// Reads what the player banner shows. When replaying a programme of
-/// `replay` seconds, the timeline is the programme, not the cached window of
-/// a live stream; the guide's length is used because a catch-up stream
-/// rarely reports its own.
-pub fn read(engine: &Engine, fullscreen: bool, replay: Option<f64>) -> PlayerState {
-    if let Some(duration) = replay {
+/// What the player's timeline spans.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Timeline {
+    /// The cached window of a live stream; the right end is live.
+    Live,
+    /// A programme replayed from catch-up, this many seconds long. The
+    /// guide's length is used because a catch-up stream rarely reports its
+    /// own.
+    Programme(f64),
+    /// A movie or an episode, as long as mpv says.
+    Title,
+}
+
+/// Reads what the player banner shows.
+pub fn read(engine: &Engine, fullscreen: bool, timeline: Timeline) -> PlayerState {
+    let fixed = match timeline {
+        Timeline::Live => None,
+        Timeline::Programme(length) => Some(length),
+        Timeline::Title => Some(engine.duration().unwrap_or(0.0)),
+    };
+    if let Some(duration) = fixed {
         let position = engine.position().unwrap_or(0.0);
         let tracks = engine
             .get_property::<String>("track-list")
@@ -42,7 +58,8 @@ pub fn read(engine: &Engine, fullscreen: bool, replay: Option<f64>) -> PlayerSta
             audio: track_label(&tracks, "audio").into(),
             subtitles: track_label(&tracks, "sub").into(),
             fullscreen,
-            replay: true,
+            replay: matches!(timeline, Timeline::Programme(_)),
+            vod: timeline == Timeline::Title,
             time: format!("{} / {}", clock(position), clock(duration)).into(),
         };
     }
@@ -74,6 +91,7 @@ pub fn read(engine: &Engine, fullscreen: bool, replay: Option<f64>) -> PlayerSta
         subtitles: track_label(&tracks, "sub").into(),
         fullscreen,
         replay: false,
+        vod: false,
         time: SharedString::new(),
     }
 }
@@ -89,9 +107,17 @@ pub fn seek(engine: &Engine, seconds: f64) {
     report("seek", engine.seek_relative(seconds));
 }
 
-/// Jumps to `fraction` (0 to 1) of a replayed programme `length` seconds
-/// long.
-pub fn seek_to_part(engine: &Engine, fraction: f32, length: f64) {
+/// Jumps to `fraction` (0 to 1) of the timeline.
+pub fn seek_to(engine: &Engine, fraction: f32, timeline: Timeline) {
+    match timeline {
+        Timeline::Live => seek_in_cache(engine, fraction),
+        Timeline::Programme(length) => seek_to_part(engine, fraction, length),
+        Timeline::Title => seek_to_part(engine, fraction, engine.duration().unwrap_or(0.0)),
+    }
+}
+
+/// Jumps to `fraction` (0 to 1) of something `length` seconds long.
+fn seek_to_part(engine: &Engine, fraction: f32, length: f64) {
     report(
         "seek",
         engine.seek_absolute(length * f64::from(fraction.clamp(0.0, 1.0))),
@@ -99,7 +125,7 @@ pub fn seek_to_part(engine: &Engine, fraction: f32, length: f64) {
 }
 
 /// Jumps to `fraction` (0 to 1) of the cached window.
-pub fn seek_to(engine: &Engine, fraction: f32) {
+fn seek_in_cache(engine: &Engine, fraction: f32) {
     let window = engine
         .get_property::<String>("demuxer-cache-state")
         .ok()

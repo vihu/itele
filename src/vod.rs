@@ -97,6 +97,13 @@ impl<T: Tile> Catalog<T> {
         }
         self.regroup();
     }
+
+    /// The provider and title at `index` of `group`.
+    pub fn title(&self, group: usize, index: usize) -> Option<(&Source<T>, &T)> {
+        let g = self.groups.get(group)?;
+        let source = &self.sources[g.source];
+        Some((source, source.shelf.titles.get(*g.titles.get(index)?)?))
+    }
 }
 
 impl<T: Tile> Shelves for Catalog<T> {
@@ -330,7 +337,8 @@ mod tests {
             ("2025", "6.9")
         );
         assert_eq!(catalog.posters(0), ["http://p/1.jpg", "", ""]);
-        assert_eq!(catalog.poster_items(2)[0].title, "Cottontail");
+        assert_eq!(catalog.title(2, 0).unwrap().1.name, "Cottontail");
+        assert!(catalog.title(2, 1).is_none());
         assert!(catalog.poster_items(9).is_empty());
     }
 

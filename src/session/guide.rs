@@ -108,12 +108,12 @@ impl Session {
     }
 
     /// Shows the selected channel's programme and what follows it. A replay
-    /// in the player keeps its own programme.
+    /// or a title in the player keeps its own.
     pub(super) fn refresh_programme(&self) {
         let Some(app) = self.app.upgrade() else {
             return;
         };
-        if self.replaying() && app.get_screen() == crate::ui::Screen::Player {
+        if !self.playing_live() && app.get_screen() == crate::ui::Screen::Player {
             return;
         }
         let now = now();

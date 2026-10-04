@@ -84,13 +84,21 @@ pub(super) fn clock(at: i64) -> String {
     )
 }
 
-/// `38 min left`, `1 h 12 min left`.
+/// `38 min left`, `1 h 12 min left`, rounded up.
 pub(super) fn minutes_left(seconds: i64) -> String {
-    let minutes = (seconds.max(0) + 59) / 60;
+    format!("{} left", hours_minutes((seconds.max(0) + 59) / 60))
+}
+
+/// A running time: `45 min`, `1 h 34 min`, to the nearest minute.
+pub(super) fn runtime(seconds: i64) -> String {
+    hours_minutes((seconds.max(0) + 30) / 60)
+}
+
+fn hours_minutes(minutes: i64) -> String {
     match (minutes / 60, minutes % 60) {
-        (0, m) => format!("{m} min left"),
-        (h, 0) => format!("{h} h left"),
-        (h, m) => format!("{h} h {m} min left"),
+        (0, m) => format!("{m} min"),
+        (h, 0) => format!("{h} h"),
+        (h, m) => format!("{h} h {m} min"),
     }
 }
 
@@ -113,6 +121,8 @@ mod tests {
         assert_eq!(minutes_left(3600), "1 h left");
         assert_eq!(minutes_left(72 * 60), "1 h 12 min left");
         assert_eq!(minutes_left(-5), "0 min left");
+        assert_eq!(runtime(5645), "1 h 34 min");
+        assert_eq!(runtime(2 * 3600 + 10), "2 h");
     }
 
     #[test]

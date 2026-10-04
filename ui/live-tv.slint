@@ -32,6 +32,7 @@ export component LiveTvScreen inherits Rectangle {
     callback settings-clicked();
     callback switch-clicked();
     callback navigate(int);
+    callback next-provider();
     // Rows `first` to `first + count` are on screen, for lazy logos.
     callback rows-visible(int, int);
 
@@ -42,9 +43,24 @@ export component LiveTvScreen inherits Rectangle {
 
     property <ChannelItem> current: root.channel-index >= 0 && root.channel-index < root.channels.length ? root.channels[root.channel-index] : { name: "" };
 
-    // Scrolls the groups so `index` is visible.
-    public function reveal-group(index: int) {
-        groups.reveal(index);
+    public function focus-keys() {
+        keys.focus();
+    }
+
+    function select(index: int) {
+        if (root.channels.length > 0) {
+            let target = max(0, min(root.channels.length - 1, index));
+            root.channel-selected(target);
+            root.reveal(target);
+        }
+    }
+
+    function select-group(index: int) {
+        if (root.groups.length > 0) {
+            let target = max(0, min(root.groups.length - 1, index));
+            root.group-selected(target);
+            groups.reveal(target);
+        }
     }
 
     // Scrolls the channel list so row `index` is visible.
@@ -57,6 +73,39 @@ export component LiveTvScreen inherits Rectangle {
     }
 
     background: Theme.bg;
+    keys := FocusScope {
+        key-pressed(event) => {
+            let key = event.text.to-lowercase();
+            if (event.text == Key.UpArrow) {
+                root.select(root.channel-index - 1);
+            } else if (event.text == Key.DownArrow) {
+                root.select(root.channel-index + 1);
+            } else if (event.text == Key.PageUp) {
+                root.select(root.channel-index - 10);
+            } else if (event.text == Key.PageDown) {
+                root.select(root.channel-index + 10);
+            } else if (event.text == Key.Home) {
+                root.select(0);
+            } else if (event.text == Key.End) {
+                root.select(root.channels.length - 1);
+            } else if (event.text == Key.LeftArrow) {
+                root.select-group(root.group-index - 1);
+            } else if (event.text == Key.RightArrow) {
+                root.select-group(root.group-index + 1);
+            } else if (event.text == Key.Return && root.channel-index >= 0) {
+                root.watch();
+            } else if (key == "g") {
+                root.navigate(2);
+            } else if (event.text == "/" || (event.modifiers.control && key == "k")) {
+                root.navigate(5);
+            } else if (key == "p") {
+                root.next-provider();
+            } else {
+                return reject;
+            }
+            accept
+        }
+    }
     HorizontalLayout {
         Rail {
             avatar: root.avatar;
@@ -78,7 +127,8 @@ export component LiveTvScreen inherits Rectangle {
                     groups: root.groups;
                     group-index: root.group-index;
                     group-selected(i) => {
-                        root.group-selected(i);
+                        root.select-group(i);
+                        keys.focus();
                     }
                     switch-clicked => {
                         root.switch-clicked();
@@ -117,6 +167,7 @@ export component LiveTvScreen inherits Rectangle {
                                 selected: i == root.channel-index;
                                 clicked => {
                                     root.channel-selected(i);
+                                    keys.focus();
                                 }
                                 double-clicked => {
                                     root.channel-selected(i);

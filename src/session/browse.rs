@@ -5,7 +5,7 @@ use std::rc::Rc;
 use camino::Utf8PathBuf;
 use slint::{Image, Model, ModelRc, TimerMode, VecModel};
 
-use super::{Playing, SELECT_DELAY, Session, State, with_session};
+use super::{Content, Playing, SELECT_DELAY, Session, State, with_session};
 
 /// Rows asked for logos when a group opens, before the list reports what
 /// it shows.
@@ -35,10 +35,10 @@ impl Session {
         }
         let channels = Rc::new(VecModel::from(items));
         app.set_channels(ModelRc::from(Rc::clone(&channels)));
-        let row = state
-            .playing
-            .as_ref()
-            .and_then(|p| state.catalog.row_of(group, &p.provider, p.stream.id));
+        let row = state.playing.as_ref().and_then(|p| {
+            let stream = p.channel()?;
+            state.catalog.row_of(group, &p.provider, stream.id)
+        });
         app.set_channel_index(row.map_or(-1, |r| r as i32));
         state.group = group;
         state.channels = channels;
@@ -138,7 +138,7 @@ impl Session {
             return;
         };
         if playing.as_ref().is_some_and(|p| {
-            p.provider == source.id && p.stream.id == stream.id && p.replay.is_none()
+            p.provider == source.id && matches!(&p.content, Content::Live(s) if s.id == stream.id)
         }) {
             return;
         }
@@ -156,8 +156,7 @@ impl Session {
                 app.set_provider_name(source.name.as_str().into());
                 *playing = Some(Playing {
                     provider: source.id.clone(),
-                    stream: stream.clone(),
-                    replay: None,
+                    content: Content::Live(stream.clone()),
                 });
             }
             Err(_) => app.set_video_note("Could not start playback".into()),

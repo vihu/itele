@@ -8,6 +8,7 @@
 
 mod browse;
 mod catchup;
+mod details;
 mod grid;
 mod guide;
 mod player;
@@ -90,6 +91,10 @@ struct State {
     movies: crate::vod::Catalog<Movie>,
     shows: crate::vod::Catalog<Show>,
     browse: vod::Browse,
+    /// The detail page showing, if any.
+    page: Option<details::Page>,
+    /// Source of page tokens.
+    next_page: u64,
     playing: Option<Playing>,
     /// Source of [`Slot::epoch`] values.
     next_epoch: u64,
@@ -109,13 +114,37 @@ struct Slot {
     epoch: u64,
 }
 
-/// The channel mpv is playing.
+/// What mpv is playing, and from which provider.
 #[derive(Clone)]
 struct Playing {
     provider: String,
-    stream: LiveStream,
-    /// The past programme being replayed from catch-up; `None` when live.
-    replay: Option<Programme>,
+    content: Content,
+}
+
+#[derive(Clone)]
+enum Content {
+    /// A channel, live.
+    Live(LiveStream),
+    /// A past programme of a channel, from catch-up.
+    Replay(LiveStream, Programme),
+    /// A movie or an episode.
+    Title(Title),
+}
+
+/// A movie or an episode playing.
+#[derive(Clone)]
+struct Title {
+    name: String,
+}
+
+impl Playing {
+    /// The channel, when a channel is playing (live or from catch-up).
+    fn channel(&self) -> Option<&LiveStream> {
+        match &self.content {
+            Content::Live(stream) | Content::Replay(stream, _) => Some(stream),
+            Content::Title(_) => None,
+        }
+    }
 }
 
 /// Wires `app` to a new session and opens the saved providers, or the login
@@ -166,13 +195,7 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
         with_session(|s| playback::seek(&s.engine, f64::from(sign.signum()) * SEEK_STEP));
     });
     app.on_seek_to(|fraction| {
-        with_session(|s| {
-            if let Some(length) = s.replay_length() {
-                playback::seek_to_part(&s.engine, fraction, length);
-            } else {
-                playback::seek_to(&s.engine, fraction);
-            }
-        });
+        with_session(|s| playback::seek_to(&s.engine, fraction, s.timeline()));
     });
     app.on_set_volume(|percent| with_session(|s| playback::set_volume(&s.engine, percent)));
     app.on_toggle_mute(|| with_session(|s| playback::toggle_mute(&s.engine)));
@@ -195,6 +218,9 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
     app.on_search_move(|delta| with_session(|s| s.search_move(delta)));
     app.on_vod_group_selected(|i| with_session(|s| s.vod_group_selected(i)));
     app.on_vod_items_visible(|first, count| with_session(|s| s.vod_items_visible(first, count)));
+    app.on_vod_open(|i| with_session(|s| s.vod_open(i)));
+    app.on_details_play(|| with_session(|s| s.details_play()));
+    app.on_details_back(|| with_session(|s| s.details_back()));
     app.on_cycle_audio(|| with_session(|s| playback::next_audio(&s.engine)));
     app.on_cycle_subtitles(|| with_session(|s| playback::next_subtitles(&s.engine)));
 
@@ -295,12 +321,13 @@ fn drain_events(
                 match event {
                     PlaybackEvent::PlaybackRestart => app.set_video_note(SharedString::new()),
                     PlaybackEvent::Failed { .. } => {
-                        app.set_video_note("This channel is not available right now".into());
+                        app.set_video_note("This stream is not available right now".into());
                     }
                     PlaybackEvent::Ended {
                         reason: EndReason::Eof,
                     } => {
                         app.set_video_note("The stream ended".into());
+                        with_session(|s| s.title_ended());
                     }
                     _ => {}
                 }

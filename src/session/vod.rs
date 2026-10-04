@@ -161,11 +161,36 @@ impl Session {
     /// A picture arrived; shows it wherever it is still wanted.
     pub(super) fn art_ready(&self, url: String, size: Size, picture: Option<Picture>) {
         self.art.borrow_mut().finish(&url, size);
-        let Some(picture) = picture else {
+        let Some(image) = picture.and_then(Picture::image) else {
             return;
         };
         if size == Size::Poster {
-            self.show_poster(&url, picture);
+            self.show_poster(&url, &image);
+        }
+        self.page_art_ready(&url, size, &image);
+    }
+
+    /// Enter or a click on a title: opens its page.
+    pub(super) fn vod_open(&self, index: i32) {
+        let Ok(index) = usize::try_from(index) else {
+            return;
+        };
+        let movie = {
+            let state = self.state.borrow();
+            let Some(kind) = state.browse.kind else {
+                return;
+            };
+            let group = state.browse.groups[kind.index()];
+            match kind {
+                Kind::Movies => state
+                    .movies
+                    .title(group, index)
+                    .map(|(source, movie)| (source.id.clone(), movie.clone())),
+                Kind::Series => None,
+            }
+        };
+        if let Some((provider, movie)) = movie {
+            self.open_movie(provider, movie);
         }
     }
 
@@ -304,23 +329,14 @@ impl Session {
         self.vod_items_visible(index - FIRST_TITLES / 2, FIRST_TITLES);
     }
 
-    fn show_poster(&self, url: &str, picture: Picture) {
-        let state = self.state.borrow();
-        let browse = &state.browse;
+    fn show_poster(&self, url: &str, image: &Image) {
+        let mut state = self.state.borrow_mut();
+        let browse = &mut state.browse;
         let rows: Vec<usize> = browse
             .window
             .clone()
             .filter(|&i| browse.urls.get(i).is_some_and(|u| u == url))
             .collect();
-        if rows.is_empty() {
-            return;
-        }
-        let Some(image) = picture.image() else {
-            return;
-        };
-        drop(state);
-        let mut state = self.state.borrow_mut();
-        let browse = &mut state.browse;
         for i in rows {
             if let Some(mut item) = browse.items.row_data(i) {
                 item.poster = image.clone();

@@ -12,10 +12,11 @@ import { ProviderItem } from "models.slint";
 import { SearchItem, SearchScreen } from "search.slint";
 import { ProvidersPanel, SwitcherPanel } from "popups.slint";
 import { PosterItem, VodScreen } from "vod.slint";
+import { DetailsScreen, TitleDetails } from "details.slint";
 
-export { ChannelItem, GroupItem, ProviderItem, SearchItem, GuideCell, GuideDetails, GuideRow, GuideTick, InfoLine, InfoPair, PlayerState, PosterItem, ProgrammeInfo, UpcomingItem }
+export { ChannelItem, GroupItem, ProviderItem, SearchItem, GuideCell, GuideDetails, GuideRow, GuideTick, InfoLine, InfoPair, PlayerState, PosterItem, ProgrammeInfo, TitleDetails, UpcomingItem }
 
-export enum Screen { login, live, guide, search, movies, series, player }
+export enum Screen { login, live, guide, search, movies, series, details, player }
 
 
 export component AppWindow inherits Window {
@@ -107,6 +108,13 @@ export component AppWindow inherits Window {
         vod.reveal(root.vod-index);
     }
 
+    // The detail page of a movie or series.
+    in property <TitleDetails> details;
+    // The rail item the page belongs to: 3 movies, 4 series.
+    in property <int> details-rail: 3;
+    callback details-play();
+    callback details-back();
+
     // Playback.
     in property <image> frame;
     in property <string> video-note;
@@ -116,6 +124,8 @@ export component AppWindow inherits Window {
     in property <[UpcomingItem]> upcoming;
     in-out property <bool> info-visible;
     in property <[InfoLine]> info;
+    // The label of the player's back button, for example "Live TV".
+    in property <string> player-back: "Live TV";
     out property <length> video-width: screen == Screen.player ? root.width : screen == Screen.guide ? guide.video-width : live.video-width;
     out property <length> video-height: screen == Screen.player ? root.height : screen == Screen.guide ? guide.video-height : live.video-height;
     callback watch();
@@ -139,13 +149,15 @@ export component AppWindow inherits Window {
         if (root.screen == Screen.login) {
             login-screen.focus-first();
         } else if (root.screen == Screen.live) {
-            live-keys.focus();
+            live.focus-keys();
         } else if (root.screen == Screen.guide) {
-            guide-keys.focus();
+            guide.focus-keys();
         } else if (root.screen == Screen.search) {
             search.focus-field();
         } else if (root.screen == Screen.movies || root.screen == Screen.series) {
             vod.focus-keys();
+        } else if (root.screen == Screen.details) {
+            details-screen.focus-keys();
         } else {
             player-screen.focus-keys();
         }
@@ -167,201 +179,123 @@ export component AppWindow inherits Window {
 
     property <ChannelItem> current: root.channel-index >= 0 && root.channel-index < root.channels.length ? root.channels[root.channel-index] : { name: "" };
 
-    function select(index: int) {
-        if (root.channels.length > 0) {
-            let target = max(0, min(root.channels.length - 1, index));
-            root.channel-selected(target);
-            live.reveal(target);
-        }
-    }
-
     function next-provider() {
         if (root.providers.length > 1) {
             root.view-selected(root.view-index + 1 >= root.providers.length ? -1 : root.view-index + 1);
         }
     }
 
-    function select-group(index: int) {
-        if (root.groups.length > 0) {
-            let target = max(0, min(root.groups.length - 1, index));
-            root.group-selected(target);
-            live.reveal-group(target);
-        }
-    }
-
-    live-keys := FocusScope {
+    live := LiveTvScreen {
         visible: root.screen == Screen.live;
-        key-pressed(event) => {
-            if (event.text == Key.UpArrow) {
-                root.select(root.channel-index - 1);
-            } else if (event.text == Key.DownArrow) {
-                root.select(root.channel-index + 1);
-            } else if (event.text == Key.PageUp) {
-                root.select(root.channel-index - 10);
-            } else if (event.text == Key.PageDown) {
-                root.select(root.channel-index + 10);
-            } else if (event.text == Key.Home) {
-                root.select(0);
-            } else if (event.text == Key.End) {
-                root.select(root.channels.length - 1);
-            } else if (event.text == Key.LeftArrow) {
-                root.select-group(root.group-index - 1);
-            } else if (event.text == Key.RightArrow) {
-                root.select-group(root.group-index + 1);
-            } else if (event.text == Key.Return && root.channel-index >= 0) {
-                root.watch();
-            } else if (event.text.to-lowercase() == "g") {
-                root.navigate(2);
-            } else if (event.text == "/" || (event.modifiers.control && event.text.to-lowercase() == "k")) {
-                root.navigate(5);
-            } else if (event.text.to-lowercase() == "p") {
-                root.next-provider();
-            } else {
-                return reject;
-            }
-            accept
+        groups: root.groups;
+        group-index: root.group-index;
+        channels: root.channels;
+        channel-index: root.channel-index;
+        group-title: root.group-title;
+        status: root.status;
+        avatar: root.avatar;
+        view-name: root.view-name;
+        frame: root.screen == Screen.live ? root.frame : @image-url("");
+        video-note: root.video-note;
+        programme: root.programme;
+        upcoming: root.upcoming;
+        group-selected(i) => {
+            root.group-selected(i);
         }
-        live := LiveTvScreen {
-            groups: root.groups;
-            group-index: root.group-index;
-            channels: root.channels;
-            channel-index: root.channel-index;
-            group-title: root.group-title;
-            status: root.status;
-            avatar: root.avatar;
-            frame: root.screen == Screen.live ? root.frame : @image-url("");
-            video-note: root.video-note;
-            programme: root.programme;
-            upcoming: root.upcoming;
-            group-selected(i) => {
-                root.select-group(i);
-                live-keys.focus();
-            }
-            channel-selected(i) => {
-                root.channel-selected(i);
-                live-keys.focus();
-            }
-            watch => {
-                root.watch();
-            }
-            view-name: root.view-name;
-            settings-clicked => {
-                settings.show();
-            }
-            navigate(i) => {
-                root.navigate(i);
-            }
-            switch-clicked => {
-                switcher.show();
-            }
-            rows-visible(first, count) => {
-                root.rows-visible(first, count);
-            }
+        channel-selected(i) => {
+            root.channel-selected(i);
+        }
+        watch => {
+            root.watch();
+        }
+        settings-clicked => {
+            settings.show();
+        }
+        navigate(i) => {
+            root.navigate(i);
+        }
+        next-provider => {
+            root.next-provider();
+        }
+        switch-clicked => {
+            switcher.show();
+        }
+        rows-visible(first, count) => {
+            root.rows-visible(first, count);
         }
     }
 
-    guide-keys := FocusScope {
+    guide := GuideScreen {
         visible: root.screen == Screen.guide;
-        key-pressed(event) => {
-            let key = event.text.to-lowercase();
-            if (event.text == Key.UpArrow) {
-                root.guide-move(0, -1);
-            } else if (event.text == Key.DownArrow) {
-                root.guide-move(0, 1);
-            } else if (event.text == Key.LeftArrow) {
-                root.guide-move(-1, 0);
-            } else if (event.text == Key.RightArrow) {
-                root.guide-move(1, 0);
-            } else if (event.text == Key.PageUp) {
-                root.guide-page(-1);
-            } else if (event.text == Key.PageDown) {
-                root.guide-page(1);
-            } else if (key == "n" || event.text == Key.Home) {
-                root.guide-now();
-            } else if (event.text == Key.Return) {
-                root.guide-enter();
-            } else if (event.text == Key.Escape || key == "g") {
-                root.navigate(1);
-            } else if (event.text == "/" || (event.modifiers.control && key == "k")) {
-                root.navigate(5);
-            } else {
-                return reject;
-            }
-            accept
+        rows: root.guide-rows;
+        row-index: root.guide-row;
+        ticks: root.guide-ticks;
+        now-x: root.guide-now-x;
+        day: root.guide-day;
+        details: root.guide-details;
+        frame: root.screen == Screen.guide ? root.frame : @image-url("");
+        video-note: root.video-note;
+        avatar: root.avatar;
+        rows-visible(first, count) => {
+            root.guide-rows-visible(first, count);
         }
-        guide := GuideScreen {
-            rows: root.guide-rows;
-            row-index: root.guide-row;
-            ticks: root.guide-ticks;
-            now-x: root.guide-now-x;
-            day: root.guide-day;
-            details: root.guide-details;
-            frame: root.screen == Screen.guide ? root.frame : @image-url("");
-            video-note: root.video-note;
-            avatar: root.avatar;
-            rows-visible(first, count) => {
-                root.guide-rows-visible(first, count);
-            }
-            cell-clicked(row, cell) => {
-                root.guide-cell-clicked(row, cell);
-                guide-keys.focus();
-            }
-            watch => {
-                root.guide-enter();
-            }
-            replay => {
-                root.guide-replay();
-            }
-            earlier => {
-                root.guide-shift(-1);
-            }
-            later => {
-                root.guide-shift(1);
-            }
-            navigate(i) => {
-                root.navigate(i);
-            }
-            settings-clicked => {
-                settings.show();
-            }
+        cell-clicked(row, cell) => {
+            root.guide-cell-clicked(row, cell);
+            guide.focus-keys();
+        }
+        move(dx, dy) => {
+            root.guide-move(dx, dy);
+        }
+        page(direction) => {
+            root.guide-page(direction);
+        }
+        now => {
+            root.guide-now();
+        }
+        enter => {
+            root.guide-enter();
+        }
+        watch => {
+            root.guide-enter();
+        }
+        replay => {
+            root.guide-replay();
+        }
+        earlier => {
+            root.guide-shift(-1);
+        }
+        later => {
+            root.guide-shift(1);
+        }
+        navigate(i) => {
+            root.navigate(i);
+        }
+        settings-clicked => {
+            settings.show();
         }
     }
 
-    search-keys := FocusScope {
+    search := SearchScreen {
         visible: root.screen == Screen.search;
-        // Arrows, Enter and Esc drive the results; everything else types.
-        capture-key-pressed(event) => {
-            if (event.text == Key.UpArrow) {
-                root.search-move(-1);
-            } else if (event.text == Key.DownArrow) {
-                root.search-move(1);
-            } else if (event.text == Key.Return) {
-                root.search-picked(root.search-index);
-            } else if (event.text == Key.Escape) {
-                root.navigate(1);
-            } else {
-                return reject;
-            }
-            accept
+        query <=> root.search-query;
+        items: root.search-items;
+        index: root.search-index;
+        note: root.search-note;
+        avatar: root.avatar;
+        edited(text) => {
+            root.search-edited(text);
         }
-        search := SearchScreen {
-            query <=> root.search-query;
-            items: root.search-items;
-            index: root.search-index;
-            note: root.search-note;
-            avatar: root.avatar;
-            edited(text) => {
-                root.search-edited(text);
-            }
-            picked(i) => {
-                root.search-picked(i);
-            }
-            navigate(i) => {
-                root.navigate(i);
-            }
-            settings-clicked => {
-                settings.show();
-            }
+        picked(i) => {
+            root.search-picked(i);
+        }
+        move(delta) => {
+            root.search-move(delta);
+        }
+        navigate(i) => {
+            root.navigate(i);
+        }
+        settings-clicked => {
+            settings.show();
         }
     }
 
@@ -402,8 +336,28 @@ export component AppWindow inherits Window {
         }
     }
 
+    details-screen := DetailsScreen {
+        visible: root.screen == Screen.details;
+        details: root.details;
+        avatar: root.avatar;
+        rail-active: root.details-rail;
+        play => {
+            root.details-play();
+        }
+        back => {
+            root.details-back();
+        }
+        navigate(i) => {
+            root.navigate(i);
+        }
+        settings-clicked => {
+            settings.show();
+        }
+    }
+
     player-screen := PlayerScreen {
         visible: root.screen == Screen.player;
+        back-label: root.player-back;
         frame: root.screen == Screen.player ? root.frame : @image-url("");
         channel: root.current;
         programme: root.programme;

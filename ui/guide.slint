@@ -107,6 +107,16 @@ export component GuideScreen inherits Rectangle {
     callback later();
     callback navigate(int);
     callback settings-clicked();
+    // Keyboard: move the selection by cells and rows, a page of rows, to
+    // now, and Enter on the selected programme.
+    callback move(int, int);
+    callback page(int);
+    callback now();
+    callback enter();
+
+    public function focus-keys() {
+        keys.focus();
+    }
 
     property <length> per-minute: 6px;
     property <length> channel-column: 236px;
@@ -126,6 +136,35 @@ export component GuideScreen inherits Rectangle {
     }
 
     background: Theme.bg;
+    keys := FocusScope {
+        key-pressed(event) => {
+            let key = event.text.to-lowercase();
+            if (event.text == Key.UpArrow) {
+                root.move(0, -1);
+            } else if (event.text == Key.DownArrow) {
+                root.move(0, 1);
+            } else if (event.text == Key.LeftArrow) {
+                root.move(-1, 0);
+            } else if (event.text == Key.RightArrow) {
+                root.move(1, 0);
+            } else if (event.text == Key.PageUp) {
+                root.page(-1);
+            } else if (event.text == Key.PageDown) {
+                root.page(1);
+            } else if (key == "n" || event.text == Key.Home) {
+                root.now();
+            } else if (event.text == Key.Return) {
+                root.enter();
+            } else if (event.text == Key.Escape || key == "g") {
+                root.navigate(1);
+            } else if (event.text == "/" || (event.modifiers.control && key == "k")) {
+                root.navigate(5);
+            } else {
+                return reject;
+            }
+            accept
+        }
+    }
     HorizontalLayout {
         Rail {
             avatar: root.avatar;

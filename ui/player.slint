@@ -20,7 +20,9 @@ export struct PlayerState {
     fullscreen: bool,
     // Playing a past programme from catch-up rather than live.
     replay: bool,
-    // In replay, for example "12:34 / 1:00:00".
+    // Playing a movie or an episode.
+    vod: bool,
+    // In replay and VOD, for example "12:34 / 1:00:00".
     time: string,
 }
 
@@ -45,6 +47,7 @@ export component PlayerScreen inherits Rectangle {
     in property <bool> banner-visible;
     in-out property <bool> info-visible;
     in property <[InfoLine]> info;
+    in property <string> back-label: "Live TV";
     callback back();
     callback escape();
     callback zap(int);
@@ -149,7 +152,7 @@ export component PlayerScreen inherits Rectangle {
                 alignment: start;
                 Button {
                     kind: ButtonKind.secondary;
-                    text: "Live TV";
+                    text: root.back-label;
                     icon: @image-url("icons/arrow-left.svg");
                     has-icon: true;
                     clicked => {
@@ -215,7 +218,7 @@ export component PlayerScreen inherits Rectangle {
                 HorizontalLayout {
                     spacing: 12px;
                     alignment: start;
-                    VerticalLayout {
+                    if !root.state.vod: VerticalLayout {
                         alignment: center;
                         ChannelLogo {
                             width: 64px;
@@ -226,14 +229,14 @@ export component PlayerScreen inherits Rectangle {
                             has-logo: root.channel.has-logo;
                         }
                     }
-                    Text {
+                    if !root.state.vod: Text {
                         text: root.channel.number;
                         color: Theme.text-2;
                         font-size: Theme.fs-lg;
                         font-weight: 700;
                         vertical-alignment: center;
                     }
-                    if root.channel.archive != "": VerticalLayout {
+                    if !root.state.vod && root.channel.archive != "": VerticalLayout {
                         alignment: center;
                         Tag {
                             text: root.channel.archive;
@@ -263,8 +266,8 @@ export component PlayerScreen inherits Rectangle {
                     overflow: elide;
                 }
                 Text {
-                    text: root.programme.title != ""
-                        ? root.channel.name + "  ·  " + root.programme.time + "  ·  " + root.programme.left
+                    text: root.state.vod ? root.programme.time
+                        : root.programme.title != "" ? root.channel.name + "  ·  " + root.programme.time + "  ·  " + root.programme.left
                         : root.channel.group;
                     color: Theme.text-2;
                     font-size: Theme.fs-md;
@@ -357,10 +360,17 @@ export component PlayerScreen inherits Rectangle {
                             }
                         }
                     }
-                    if !root.state.replay && root.state.behind == "": LiveMarker {
+                    if root.state.vod: Text {
+                        text: root.state.time;
+                        color: Theme.text;
+                        font-size: Theme.fs-md;
+                        font-weight: 600;
+                        vertical-alignment: center;
+                    }
+                    if !root.state.replay && !root.state.vod && root.state.behind == "": LiveMarker {
                         alignment: center;
                     }
-                    if !root.state.replay && root.state.behind != "": HorizontalLayout {
+                    if !root.state.replay && !root.state.vod && root.state.behind != "": HorizontalLayout {
                         spacing: 12px;
                         Text {
                             text: "-" + root.state.behind;
