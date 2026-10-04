@@ -91,10 +91,10 @@ impl Session {
         let now = now();
         let state = self.state.borrow();
         for row in rows {
-            let Some(id) = state.row_guide_ids.get(row).filter(|id| !id.is_empty()) else {
+            let Some(key) = state.row_guides.get(row).filter(|k| !k.channel.is_empty()) else {
                 continue;
             };
-            let Ok((current, next)) = store.now_next(&state.row_provider, id, now) else {
+            let Ok((current, next)) = store.now_next(&key.provider, &key.channel, now) else {
                 continue;
             };
             let Some(mut item) = state.channels.row_data(row) else {
@@ -137,12 +137,12 @@ impl Session {
             let guide = self.guide.borrow();
             usize::try_from(app.get_channel_index())
                 .ok()
-                .and_then(|row| state.row_guide_ids.get(row))
-                .filter(|id| !id.is_empty())
+                .and_then(|row| state.row_guides.get(row))
+                .filter(|key| !key.channel.is_empty())
                 .zip(guide.as_ref())
-                .and_then(|(id, store)| {
+                .and_then(|(key, store)| {
                     store
-                        .between(&state.row_provider, id, now, now + UPCOMING_SPAN)
+                        .between(&key.provider, &key.channel, now, now + UPCOMING_SPAN)
                         .ok()
                 })
                 .unwrap_or_default()

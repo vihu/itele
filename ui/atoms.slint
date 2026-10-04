@@ -122,6 +122,37 @@ export component Tag inherits Rectangle {
     }
 }
 
+// A provider's name with its hue, the same everywhere it shows.
+export component ProviderTag inherits Rectangle {
+    in property <string> text;
+    in property <color> hue;
+    height: 22px;
+    border-radius: 11px;
+    background: #ffffff0f;
+    HorizontalLayout {
+        padding-left: 7px;
+        padding-right: 8px;
+        spacing: 6px;
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 7px;
+                height: 7px;
+                border-radius: 3.5px;
+                background: root.hue;
+            }
+        }
+        Text {
+            text: root.text;
+            color: Theme.text-2;
+            font-size: 11px;
+            font-weight: 700;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+}
+
 export component LiveMarker inherits HorizontalLayout {
     spacing: 6px;
     VerticalLayout {

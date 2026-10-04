@@ -39,7 +39,7 @@ use mpv_engine::{EndReason, Engine, PlaybackEvent};
 use slint::{ComponentHandle, SharedString, Timer, TimerMode, VecModel};
 
 use crate::art::Art;
-use crate::live::{Catalog, View};
+use crate::live::{Catalog, GuideKey, View};
 use crate::logos::Logos;
 use crate::names::thousands;
 use crate::playback::{self, SEEK_STEP, VOLUME_STEP};
@@ -103,10 +103,8 @@ struct State {
     channels: Rc<VecModel<ChannelItem>>,
     /// Each row's logo URL, empty when the provider has none.
     row_logos: Vec<String>,
-    /// The provider of the listed group.
-    row_provider: String,
-    /// Each row's XMLTV channel id, lowercased; empty without one.
-    row_guide_ids: Vec<String>,
+    /// Where each row finds its programmes.
+    row_guides: Vec<GuideKey>,
     /// Days of catch-up each row keeps; 0 for none.
     row_archive: Vec<u32>,
     /// Rows the channel list last reported on screen.

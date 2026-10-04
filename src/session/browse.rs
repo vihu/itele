@@ -21,7 +21,7 @@ impl Session {
         app.set_group_index(group as i32);
         app.set_group_title(state.catalog.group_name(group).into());
         let row_logos = state.catalog.row_logos(group);
-        let (row_provider, row_guide_ids) = state.catalog.row_guide_ids(group);
+        let row_guides = state.catalog.row_guides(group);
         let row_archive = state.catalog.row_archive(group);
         let mut items = state.catalog.channel_items(group);
         {
@@ -43,8 +43,7 @@ impl Session {
         state.group = group;
         state.channels = channels;
         state.row_logos = row_logos;
-        state.row_provider = row_provider;
-        state.row_guide_ids = row_guide_ids;
+        state.row_guides = row_guides;
         state.row_archive = row_archive;
         state.visible = 0..0;
         drop(state);

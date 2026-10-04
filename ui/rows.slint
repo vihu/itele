@@ -1,7 +1,7 @@
 // Rows of the browse lists: a group, and a channel with now and next.
 
 import { Theme } from "theme.slint";
-import { ChannelLogo } from "atoms.slint";
+import { ChannelLogo, ProviderTag } from "atoms.slint";
 import { ChannelItem, GroupItem } from "models.slint";
 
 export component GroupRow inherits Rectangle {
@@ -83,23 +83,35 @@ export component ChannelRow inherits Rectangle {
                 has-logo: root.item.has-logo;
             }
         }
-        VerticalLayout {
+        info := VerticalLayout {
             alignment: center;
             spacing: 2px;
             horizontal-stretch: 1;
             property <bool> guide: root.item.now-title != "";
-            Text {
-                text: root.item.name;
-                color: parent.guide ? Theme.text-2 : Theme.text;
-                font-size: parent.guide ? Theme.fs-sm : Theme.fs-md;
-                font-weight: 600;
-                overflow: elide;
+            HorizontalLayout {
+                spacing: 8px;
+                Text {
+                    text: root.item.name;
+                    color: info.guide ? Theme.text-2 : Theme.text;
+                    font-size: info.guide ? Theme.fs-sm : Theme.fs-md;
+                    font-weight: 600;
+                    overflow: elide;
+                    vertical-alignment: center;
+                }
+                if root.item.provider != "": ProviderTag {
+                    text: root.item.provider;
+                    hue: root.item.hue;
+                    max-width: 120px;
+                }
+                Rectangle {
+                    horizontal-stretch: 1;
+                }
             }
             Text {
-                text: parent.guide ? root.item.now-title : root.item.group;
-                color: parent.guide ? Theme.text : Theme.text-3;
-                font-size: parent.guide ? Theme.fs-md : Theme.fs-sm;
-                font-weight: parent.guide ? 600 : 400;
+                text: info.guide ? root.item.now-title : root.item.group;
+                color: info.guide ? Theme.text : Theme.text-3;
+                font-size: info.guide ? Theme.fs-md : Theme.fs-sm;
+                font-weight: info.guide ? 600 : 400;
                 overflow: elide;
             }
             if root.item.now-progress >= 0: VerticalLayout {

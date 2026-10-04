@@ -3,12 +3,13 @@
 //! Every signed-in provider is a [`Source`]. The [`View`] picks one
 //! provider, whose groups are "All channels" and its categories, or all of
 //! them, where every provider's groups are listed and tagged with its name.
+//! A group is a list of rows, each a channel of its own provider.
 
 use itele::provider::Library;
 use itele::xtream::{LiveStream, StreamId};
-use slint::{Image, SharedString};
+use slint::{Color, Image, SharedString};
 
-use crate::names::{search_rank, short_name, thousands, tint};
+use crate::names::{provider_hue, search_rank, short_name, thousands, tint};
 use crate::ui::{ChannelItem, GroupItem};
 
 /// Name of the group that lists every channel of a provider.
@@ -52,10 +53,28 @@ pub enum View {
     One(String),
 }
 
+/// Where a row's programmes are in the guide.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct GuideKey {
+    /// The row's provider.
+    pub provider: String,
+    /// The channel's XMLTV id, lowercased; empty without one.
+    pub channel: String,
+}
+
 struct Group {
-    source: usize,
     name: String,
-    channels: Vec<usize>,
+    /// The provider the group belongs to.
+    owner: usize,
+    rows: Vec<Row>,
+}
+
+/// A channel in a group: indexes into the sources and that source's
+/// streams.
+#[derive(Clone, Copy)]
+struct Row {
+    source: usize,
+    stream: usize,
 }
 
 // Public API
@@ -120,9 +139,9 @@ impl Catalog {
             .iter()
             .map(|g| GroupItem {
                 name: g.name.as_str().into(),
-                count: thousands(g.channels.len()).into(),
+                count: thousands(g.rows.len()).into(),
                 provider: if tagged {
-                    self.sources[g.source].name.as_str().into()
+                    self.sources[g.owner].name.as_str().into()
                 } else {
                     SharedString::new()
                 },
@@ -142,77 +161,58 @@ impl Catalog {
 
     /// Number of channels in `group`.
     pub fn group_len(&self, group: usize) -> usize {
-        self.groups.get(group).map_or(0, |g| g.channels.len())
+        self.groups.get(group).map_or(0, |g| g.rows.len())
     }
 
-    /// Rows for the channels in `group`.
+    /// Rows for the channels in `group`; tagged with their provider when
+    /// every provider is listed.
     pub fn channel_items(&self, group: usize) -> Vec<ChannelItem> {
-        let Some(g) = self.groups.get(group) else {
-            return Vec::new();
-        };
-        let source = &self.sources[g.source];
-        let provider = if self.view == View::All {
-            source.name.as_str()
-        } else {
-            ""
-        };
-        g.channels
-            .iter()
+        let tagged = self.view == View::All;
+        self.rows(group)
             .enumerate()
-            .map(|(row, &i)| channel_item(source, &source.library.streams[i], row, provider))
+            .map(|(row, (source, stream))| {
+                let tag = tagged.then(|| (source.name.as_str(), self.hue(source)));
+                channel_item(source, stream, row, tag)
+            })
             .collect()
     }
 
     /// The provider and channel at `row` of `group`.
     pub fn stream(&self, group: usize, row: usize) -> Option<(&Source, &LiveStream)> {
-        let g = self.groups.get(group)?;
-        let source = &self.sources[g.source];
-        Some((source, source.library.streams.get(*g.channels.get(row)?)?))
+        let r = self.groups.get(group)?.rows.get(row)?;
+        Some(self.at(*r))
     }
 
-    /// The provider of `group` and each row's XMLTV channel id, lowercased
-    /// (empty when the channel has none).
-    pub fn row_guide_ids(&self, group: usize) -> (String, Vec<String>) {
-        let Some(g) = self.groups.get(group) else {
-            return (String::new(), Vec::new());
-        };
-        let source = &self.sources[g.source];
-        let ids = g
-            .channels
-            .iter()
-            .map(|&i| {
-                source.library.streams[i]
+    /// Where each row of `group` finds its programmes.
+    pub fn row_guides(&self, group: usize) -> Vec<GuideKey> {
+        self.rows(group)
+            .map(|(source, stream)| GuideKey {
+                provider: source.id.clone(),
+                channel: stream
                     .epg_channel_id
                     .as_deref()
                     .unwrap_or("")
-                    .to_lowercase()
+                    .to_lowercase(),
             })
-            .collect();
-        (source.id.clone(), ids)
+            .collect()
     }
 
     /// Days of catch-up each row in `group` keeps; 0 for none.
     pub fn row_archive(&self, group: usize) -> Vec<u32> {
-        let Some(g) = self.groups.get(group) else {
-            return Vec::new();
-        };
-        let streams = &self.sources[g.source].library.streams;
-        g.channels
-            .iter()
-            .map(|&i| streams[i].archive_days)
-            .collect()
+        self.rows(group).map(|(_, s)| s.archive_days).collect()
     }
 
     /// Each row's logo URL in `group`, empty when the provider has none.
     pub fn row_logos(&self, group: usize) -> Vec<String> {
-        let Some(g) = self.groups.get(group) else {
-            return Vec::new();
-        };
-        let streams = &self.sources[g.source].library.streams;
-        g.channels
-            .iter()
-            .map(|&i| streams[i].icon.clone().unwrap_or_default())
+        self.rows(group)
+            .map(|(_, s)| s.icon.clone().unwrap_or_default())
             .collect()
+    }
+
+    /// The hue of the provider with `id`, for its tags.
+    pub fn hue_of(&self, id: &str) -> Color {
+        let index = self.sources.iter().position(|s| s.id == id);
+        provider_hue(index.unwrap_or(0))
     }
 
     /// Channels whose name contains every word of `query`, across all
@@ -263,19 +263,30 @@ impl Catalog {
 
     /// The row of a provider's channel in `group`, if the group lists it.
     pub fn row_of(&self, group: usize, provider: &str, stream: StreamId) -> Option<usize> {
-        let g = self.groups.get(group)?;
-        let source = &self.sources[g.source];
-        if source.id != provider {
-            return None;
-        }
-        g.channels
-            .iter()
-            .position(|&i| source.library.streams[i].id == stream)
+        self.rows(group)
+            .position(|(source, s)| source.id == provider && s.id == stream)
     }
 }
 
 // Private API
 impl Catalog {
+    /// The provider and channel of each row of `group`.
+    fn rows(&self, group: usize) -> impl Iterator<Item = (&Source, &LiveStream)> {
+        self.groups
+            .get(group)
+            .into_iter()
+            .flat_map(|g| g.rows.iter().map(|r| self.at(*r)))
+    }
+
+    fn at(&self, row: Row) -> (&Source, &LiveStream) {
+        let source = &self.sources[row.source];
+        (source, &source.library.streams[row.stream])
+    }
+
+    fn hue(&self, source: &Source) -> Color {
+        self.hue_of(&source.id)
+    }
+
     fn regroup(&mut self) {
         let mut groups = Vec::new();
         for (index, source) in self.sources.iter().enumerate() {
@@ -290,44 +301,52 @@ impl Catalog {
 /// "All channels", then each category with channels, in provider order.
 fn source_groups(index: usize, source: &Source) -> Vec<Group> {
     let streams = &source.library.streams;
-    let mut groups = vec![Group {
+    let row = |stream| Row {
         source: index,
+        stream,
+    };
+    let mut groups = vec![Group {
         name: ALL_CHANNELS.to_owned(),
-        channels: (0..streams.len()).collect(),
+        owner: index,
+        rows: (0..streams.len()).map(row).collect(),
     }];
     for category in &source.library.categories {
-        let channels: Vec<usize> = streams
+        let rows: Vec<Row> = streams
             .iter()
             .enumerate()
             .filter(|(_, s)| s.category_id.as_ref() == Some(&category.id))
-            .map(|(i, _)| i)
+            .map(|(i, _)| row(i))
             .collect();
-        if !channels.is_empty() {
+        if !rows.is_empty() {
             groups.push(Group {
-                source: index,
                 name: category.name.clone(),
-                channels,
+                owner: index,
+                rows,
             });
         }
     }
     groups
 }
 
-fn channel_item(source: &Source, stream: &LiveStream, row: usize, provider: &str) -> ChannelItem {
+/// A channel's row; `tag` is its provider's name and hue, when shown.
+fn channel_item(
+    source: &Source,
+    stream: &LiveStream,
+    row: usize,
+    tag: Option<(&str, Color)>,
+) -> ChannelItem {
     let category = stream
         .category_id
         .as_ref()
         .and_then(|id| source.library.categories.iter().find(|c| &c.id == id))
         .map_or("", |c| c.name.as_str());
-    let group = match (category, provider) {
-        ("", provider) => provider.to_owned(),
-        (category, "") => category.to_owned(),
-        (category, provider) => format!("{category} · {provider}"),
-    };
+    let (provider, hue) = tag.unwrap_or_default();
     ChannelItem {
         number: stream.number.unwrap_or(row as u64 + 1).to_string().into(),
         name: stream.name.as_str().into(),
-        group: group.into(),
+        group: category.into(),
+        provider: provider.into(),
+        hue,
         short: short_name(&stream.name).into(),
         tint: tint(&stream.name),
         logo: Image::default(),
@@ -415,7 +434,13 @@ mod tests {
         );
         assert_eq!(catalog.total_channels(), 4);
         let rows = catalog.channel_items(4);
-        assert_eq!(rows[0].group, "News · SOUTH");
+        assert_eq!(
+            (rows[0].group.as_str(), rows[0].provider.as_str()),
+            ("News", "SOUTH")
+        );
+        assert_ne!(rows[0].hue, catalog.channel_items(0)[0].hue, "a hue each");
+        let guides = catalog.row_guides(4);
+        assert_eq!(guides[0].provider, "south");
     }
 
     #[test]
@@ -425,6 +450,7 @@ mod tests {
         catalog.set_view(View::One("north".into()));
         let rows = catalog.channel_items(0);
         assert_eq!(rows[0].number, "10");
+        assert_eq!(rows[0].provider, "", "one provider: no tags");
         assert_eq!(rows[1].group, "Sports");
         assert_eq!(rows[1].archive, "Catch-up 7 days");
         assert_eq!(

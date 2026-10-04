@@ -1,5 +1,6 @@
 //! Names as the screens draw and find them: the short name on a fallback
-//! logo tile, a stable tile colour, grouped digits, and search ranking.
+//! logo tile, a stable tile colour, a provider's hue, grouped digits, and
+//! search ranking.
 
 use slint::Color;
 
@@ -11,6 +12,9 @@ const PREFIX_MAX: usize = 4;
 const TINTS: [u32; 9] = [
     0x1f5e3b, 0x2a3cc7, 0xb3261e, 0x0f6e8c, 0x3b3f4a, 0xc2185b, 0x5b6b2e, 0xd35400, 0x6b5ca5,
 ];
+
+/// Provider tag hues, from the approved mockups and away from the accent.
+const HUES: [u32; 6] = [0x4fb3ff, 0xc792ea, 0x6fd3a0, 0xf78fb3, 0x8fa8ff, 0x5fd4e0];
 
 /// The first word of `name` that says something, upper-cased and cut to
 /// fit a logo tile. Skips a provider's country prefix (`UK: Sky Sports`,
@@ -44,6 +48,13 @@ pub fn tint(name: &str) -> Color {
         (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
     });
     let rgb = TINTS[(hash % TINTS.len() as u64) as usize];
+    Color::from_rgb_u8((rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8)
+}
+
+/// The hue of the provider at `index` in sign-in order, for its tags; the
+/// same everywhere it shows.
+pub fn provider_hue(index: usize) -> Color {
+    let rgb = HUES[index % HUES.len()];
     Color::from_rgb_u8((rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8)
 }
 

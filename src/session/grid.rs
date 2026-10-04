@@ -288,12 +288,12 @@ impl Session {
                 continue;
             }
             let programmes = state
-                .row_guide_ids
+                .row_guides
                 .get(row)
-                .filter(|id| !id.is_empty())
-                .and_then(|id| {
+                .filter(|key| !key.channel.is_empty())
+                .and_then(|key| {
                     store
-                        .between(&state.row_provider, id, start, start + WINDOW)
+                        .between(&key.provider, &key.channel, start, start + WINDOW)
                         .ok()
                 })
                 .unwrap_or_default();
