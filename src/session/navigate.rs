@@ -32,7 +32,7 @@ impl Session {
             }
             3 => self.open_vod(Kind::Movies),
             4 => self.open_vod(Kind::Series),
-            5 => self.open_search(),
+            5 => self.focus_search(),
             6 => self.open_settings(),
             _ => {}
         }

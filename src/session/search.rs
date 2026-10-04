@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use itele::epg::Programme;
 use itele::xtream::{Movie, Show, StreamId};
-use slint::{Image, Model, ModelRc, SharedString, TimerMode, VecModel};
+use slint::{ComponentHandle, Image, Model, ModelRc, SharedString, TimerMode, VecModel};
 
 use super::catchup::replayable;
 use super::timefmt::{day_time, now, when};
@@ -16,7 +16,7 @@ use super::vod::Kind;
 use super::{Session, with_session};
 use crate::art::Size;
 use crate::names::{short_name, tint};
-use crate::ui::{Screen, SearchItem};
+use crate::ui::{Screen, SearchData, SearchItem};
 use crate::vod::{Tile, TitleHit};
 
 /// Pause after the last keystroke before searching.
@@ -62,6 +62,18 @@ enum Target {
 }
 
 impl Session {
+    /// `/` or Ctrl+K: focuses the search field in the top bar; results
+    /// drop down under it as the user types.
+    pub(super) fn focus_search(&self) {
+        self.load_shelves(Kind::Movies);
+        self.load_shelves(Kind::Series);
+        if let Some(app) = self.app.upgrade() {
+            app.invoke_focus_search();
+        }
+        self.run_search();
+    }
+
+    /// Opens the Search screen with every result for the query.
     pub(super) fn open_search(&self) {
         // Movies and series are searched once loaded, which starts here if
         // their screens were not visited yet.
@@ -83,7 +95,7 @@ impl Session {
         let Some(app) = self.app.upgrade() else {
             return;
         };
-        let query = app.get_search_query().trim().to_owned();
+        let query = app.global::<SearchData>().get_query().trim().to_owned();
         let now = now();
         let mut items = Vec::new();
         let mut targets = Vec::new();
@@ -206,15 +218,22 @@ impl Session {
         } else {
             String::new()
         };
-        let index = targets
-            .iter()
-            .position(|t| !matches!(t, Target::Heading))
-            .map_or(-1, |i| i as i32);
+        // The Search screen selects the first result; the results under the
+        // field start on the field, where Enter opens them all.
+        let index = if app.get_screen() == Screen::Search {
+            targets
+                .iter()
+                .position(|t| !matches!(t, Target::Heading))
+                .map_or(-1, |i| i as i32)
+        } else {
+            -1
+        };
         posters.resize(items.len(), String::new());
         let items = Rc::new(VecModel::from(items));
-        app.set_search_note(note.into());
-        app.set_search_items(ModelRc::from(Rc::clone(&items)));
-        app.set_search_index(index);
+        let data = app.global::<SearchData>();
+        data.set_note(note.into());
+        data.set_items(ModelRc::from(Rc::clone(&items)));
+        data.set_index(index);
         {
             let mut art = self.art.borrow_mut();
             for url in posters.iter().filter(|u| !u.is_empty()) {
@@ -230,22 +249,27 @@ impl Session {
         app.invoke_reveal_search_row();
     }
 
-    /// Moves the selection by `delta` results, skipping headings.
+    /// Moves the selection by `delta` results, skipping headings; above
+    /// the first, the results under the field go back to the field.
     pub(super) fn search_move(&self, delta: i32) {
         let Some(app) = self.app.upgrade() else {
             return;
         };
         let state = self.state.borrow();
         let targets = &state.search.targets;
-        let mut index = app.get_search_index();
+        let data = app.global::<SearchData>();
+        let mut index = data.get_index();
         loop {
             let next = index + delta.signum();
             let Some(target) = usize::try_from(next).ok().and_then(|i| targets.get(i)) else {
+                if next < 0 && app.get_screen() != Screen::Search {
+                    data.set_index(-1);
+                }
                 break;
             };
             index = next;
             if !matches!(target, Target::Heading) {
-                app.set_search_index(index);
+                data.set_index(index);
                 break;
             }
         }

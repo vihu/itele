@@ -167,13 +167,20 @@ impl Session {
         let Some(app) = self.app.upgrade() else {
             return;
         };
-        let (providers, view_index, view_name, avatar, groups, group) = {
+        let (providers, view_index, view_name, chip, groups, group) = {
             let mut state = self.state.borrow_mut();
             // A single provider needs no tags: view it directly.
             if state.slots.len() == 1 && state.catalog.view() == &View::All {
                 let id = state.slots[0].provider.id.clone();
                 state.catalog.set_view(View::One(id));
             }
+            let until = |id: &str| {
+                state
+                    .catalog
+                    .source(id)
+                    .and_then(|s| expiry(&s.library.account))
+                    .map(|date| format!("Until {date}"))
+            };
             let providers: Vec<ProviderItem> = state
                 .slots
                 .iter()
@@ -185,6 +192,10 @@ impl Session {
                     } else {
                         format!("{} · {}", slot.status, slot.guide).into()
                     },
+                    avatar: initials(&slot.provider.username).into(),
+                    meta: until(&slot.provider.id)
+                        .unwrap_or_else(|| slot.status.clone())
+                        .into(),
                 })
                 .collect();
             let viewed = match state.catalog.view() {
@@ -194,16 +205,11 @@ impl Session {
             let (view_index, view_name, avatar, meta) = match viewed {
                 Some(i) => {
                     let slot = &state.slots[i];
-                    let until = state
-                        .catalog
-                        .source(&slot.provider.id)
-                        .and_then(|s| expiry(&s.library.account))
-                        .map(|date| format!("Until {date}"));
                     (
                         i as i32,
                         slot.provider.name.clone(),
                         initials(&slot.provider.username),
-                        until.unwrap_or_default(),
+                        until(&slot.provider.id).unwrap_or_default(),
                     )
                 }
                 None => (
@@ -225,10 +231,9 @@ impl Session {
         app.set_providers(ModelRc::new(VecModel::from(providers)));
         app.set_view_index(view_index);
         let shell = app.global::<Shell>();
-        shell.set_avatar(avatar.0.into());
-        shell.set_provider_name(view_name.as_str().into());
-        shell.set_provider_meta(avatar.1.into());
-        app.set_view_name(view_name.into());
+        shell.set_avatar(chip.0.into());
+        shell.set_provider_name(view_name.into());
+        shell.set_provider_meta(chip.1.into());
         app.set_groups(ModelRc::new(VecModel::from(groups)));
         app.set_status(self.view_status());
         self.select_group(group);

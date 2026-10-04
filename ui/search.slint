@@ -1,20 +1,37 @@
-// Search: channels by name and programmes by title, across every provider.
+// Search: channels by name, movies and series by title, and programmes,
+// across every provider. The query is typed in the top bar.
 
 import { ListView } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { ChannelLogo, Hint, LiveMarker } from "atoms.slint";
 import { SearchItem } from "models.slint";
-import { Sidebar } from "sidebar.slint";
 
 export { SearchItem }
 
-component ResultRow inherits Rectangle {
+// The search, shared by the top bar's field, the results under it and the
+// Search screen; the Rust side fills the results.
+export global SearchData {
+    in-out property <string> query;
+    in property <[SearchItem]> items;
+    in property <int> index: -1;
+    in property <string> note;
+    callback edited(string);
+    callback picked(int);
+    // Up and Down move through the results.
+    callback move(int);
+    // Opens the Search screen with every result.
+    callback all();
+}
+
+// One result; `compact` for the results under the top bar's field.
+export component ResultRow inherits Rectangle {
     in property <SearchItem> item;
     in property <bool> selected;
+    in property <bool> compact;
     callback clicked();
-    height: 60px;
-    border-radius: Theme.radius-md;
-    background: item.kind == 2 ? transparent : selected ? Theme.surface-2 : touch.has-hover ? Theme.surface-1 : transparent;
+    height: compact ? 52px : 60px;
+    border-radius: compact ? Theme.radius-sm : Theme.radius-md;
+    background: item.kind == 2 ? transparent : selected || (compact && touch.has-hover) ? (compact ? Theme.surface-3 : Theme.surface-2) : touch.has-hover ? Theme.surface-1 : transparent;
     border-width: selected && item.kind != 2 ? 1px : 0px;
     border-color: Theme.accent-line;
     if root.item.kind == 2: Text {
@@ -66,14 +83,14 @@ component ResultRow inherits Rectangle {
             Text {
                 text: root.item.title;
                 color: Theme.text;
-                font-size: Theme.fs-md;
+                font-size: root.compact ? Theme.fs-sm : Theme.fs-md;
                 font-weight: 600;
                 overflow: elide;
             }
             Text {
                 text: root.item.subtitle;
                 color: Theme.text-3;
-                font-size: Theme.fs-sm;
+                font-size: root.compact ? Theme.fs-xs : Theme.fs-sm;
                 overflow: elide;
             }
         }
@@ -91,7 +108,7 @@ component ResultRow inherits Rectangle {
             }
         }
         Text {
-            max-width: 320px;
+            max-width: root.compact ? 150px : 320px;
             text: root.item.detail;
             color: Theme.text-2;
             font-size: Theme.fs-sm;
@@ -110,21 +127,7 @@ component ResultRow inherits Rectangle {
 }
 
 export component SearchScreen inherits Rectangle {
-    in-out property <string> query;
-    in property <[SearchItem]> items;
-    in property <int> index;
-    in property <string> note;
-    callback edited(string);
-    callback picked(int);
     callback navigate(int);
-    // Up and Down move through the results.
-    callback move(int);
-
-    // Focuses the field with the last query selected, so typing replaces it.
-    public function focus-field() {
-        field.focus();
-        field.select-all();
-    }
 
     // Scrolls the results so `row` is visible; every row is 60px.
     public function reveal(row: int) {
@@ -138,122 +141,84 @@ export component SearchScreen inherits Rectangle {
     }
 
     background: Theme.bg;
-    // Arrows, Enter and Esc drive the results; everything else types.
+    // The keys, when a click took focus from the top bar's field.
     keys := FocusScope {
-        capture-key-pressed(event) => {
+        key-pressed(event) => {
             if (event.text == Key.UpArrow) {
-                root.move(-1);
+                SearchData.move(-1);
             } else if (event.text == Key.DownArrow) {
-                root.move(1);
+                SearchData.move(1);
             } else if (event.text == Key.Return) {
-                root.picked(root.index);
+                SearchData.picked(SearchData.index);
             } else if (event.text == Key.Escape) {
                 root.navigate(1);
+            } else if (event.text == "/" || (event.modifiers.control && event.text.to-lowercase() == "k")) {
+                root.navigate(5);
             } else {
                 return reject;
             }
             accept
         }
+    }
+    VerticalLayout {
+        padding-left: 48px;
+        padding-right: 48px;
+        padding-top: 8px;
+        spacing: 14px;
         HorizontalLayout {
-            Sidebar {
-                active: 5;
-                navigate(i) => {
-                    root.navigate(i);
+            spacing: 14px;
+            Text {
+                text: "Search";
+                color: Theme.text;
+                font-size: Theme.fs-3xl;
+                font-weight: 800;
+            }
+            Text {
+                text: SearchData.query == "" ? "" : "\u{201c}" + SearchData.query + "\u{201d}";
+                color: Theme.text-3;
+                font-size: Theme.fs-lg;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+                overflow: elide;
+            }
+        }
+        if SearchData.note != "" || SearchData.query == "": Text {
+            text: SearchData.query == "" ? "Type in the search bar above: channels, movies, series and programmes, across all providers." : SearchData.note;
+            color: Theme.text-3;
+            font-size: Theme.fs-md;
+            wrap: word-wrap;
+        }
+        list := ListView {
+            vertical-stretch: 1;
+            for item[i] in SearchData.items: ResultRow {
+                item: item;
+                selected: i == SearchData.index;
+                clicked => {
+                    SearchData.picked(i);
                 }
             }
-            VerticalLayout {
-                padding-left: 48px;
-                padding-right: 48px;
-                padding-top: 32px;
-                spacing: 18px;
-                Text {
-                    text: "Search";
-                    color: Theme.text;
-                    font-size: Theme.fs-3xl;
-                    font-weight: 800;
+        }
+        Rectangle {
+            height: 44px;
+            Rectangle {
+                y: 0;
+                height: 1px;
+                background: Theme.line;
+            }
+            HorizontalLayout {
+                spacing: 22px;
+                alignment: start;
+                Hint {
+                    keys: ["↑", "↓"];
+                    label: "Choose";
                 }
-                Rectangle {
-                    height: 52px;
-                    border-radius: Theme.radius-md;
-                    background: Theme.surface-2;
-                    border-width: field.has-focus ? 2px : 0px;
-                    border-color: Theme.accent;
-                    HorizontalLayout {
-                        padding-left: 16px;
-                        padding-right: 16px;
-                        spacing: 12px;
-                        VerticalLayout {
-                            alignment: center;
-                            Image {
-                                source: @image-url("icons/search.svg");
-                                width: 20px;
-                                height: 20px;
-                                colorize: Theme.text-3;
-                            }
-                        }
-                        Rectangle {
-                            horizontal-stretch: 1;
-                            if root.query == "": Text {
-                                x: 0;
-                                height: parent.height;
-                                text: "Channels, movies, series and programmes, across all providers";
-                                color: Theme.text-3;
-                                font-size: Theme.fs-lg;
-                                vertical-alignment: center;
-                            }
-                            field := TextInput {
-                                height: parent.height;
-                                text <=> root.query;
-                                color: Theme.text;
-                                font-size: Theme.fs-lg;
-                                vertical-alignment: center;
-                                selection-background-color: Theme.accent;
-                                selection-foreground-color: Theme.accent-ink;
-                                edited => {
-                                    root.edited(self.text);
-                                }
-                            }
-                        }
-                    }
+                Hint {
+                    keys: ["Enter"];
+                    label: "Watch or open";
                 }
-                if root.note != "": Text {
-                    text: root.note;
-                    color: Theme.text-3;
-                    font-size: Theme.fs-md;
-                }
-                list := ListView {
-                    vertical-stretch: 1;
-                    for item[i] in root.items: ResultRow {
-                        item: item;
-                        selected: i == root.index;
-                        clicked => {
-                            root.picked(i);
-                        }
-                    }
-                }
-                Rectangle {
-                    height: 44px;
-                    Rectangle {
-                        y: 0;
-                        height: 1px;
-                        background: Theme.line;
-                    }
-                    HorizontalLayout {
-                        spacing: 22px;
-                        alignment: start;
-                        Hint {
-                            keys: ["↑", "↓"];
-                            label: "Choose";
-                        }
-                        Hint {
-                            keys: ["Enter"];
-                            label: "Watch";
-                        }
-                        Hint {
-                            keys: ["Esc"];
-                            label: "Back";
-                        }
-                    }
+                Hint {
+                    keys: ["Esc"];
+                    label: "Back";
                 }
             }
         }

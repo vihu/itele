@@ -353,7 +353,7 @@ fn vod_status(state: &State, kind: Kind) -> String {
             .slots
             .iter()
             .find(|slot| &slot.provider.id == id)
-            .map(status)
+            .map(|slot| format!("{} · {}", status(slot), slot.provider.name))
             .unwrap_or_default(),
         View::All => match state.slots.as_slice() {
             [] => String::new(),

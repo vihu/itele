@@ -6,7 +6,6 @@ import { ListView } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { Button, ButtonKind } from "atoms.slint";
 import { EpisodeItem, SeasonItem, TitleDetails } from "models.slint";
-import { Sidebar } from "sidebar.slint";
 
 export { EpisodeItem, SeasonItem, TitleDetails }
 
@@ -145,8 +144,6 @@ component EpisodeRow inherits Rectangle {
 
 export component DetailsScreen inherits Rectangle {
     in property <TitleDetails> details;
-    // The rail item to highlight: 3 movies, 4 series.
-    in property <int> rail-active;
     // A series' page: seasons and episodes below a shorter hero.
     in property <bool> series;
     in property <[SeasonItem]> seasons;
@@ -230,12 +227,6 @@ export component DetailsScreen inherits Rectangle {
         }
 
         HorizontalLayout {
-            Sidebar {
-                active: root.rail-active;
-                navigate(i) => {
-                    root.navigate(i);
-                }
-            }
             VerticalLayout {
                 horizontal-stretch: 1;
                 Rectangle {

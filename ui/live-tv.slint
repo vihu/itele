@@ -5,7 +5,6 @@ import { ListView } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { Button, ButtonKind, ChannelLogo, Hint, LiveMarker, Tag } from "atoms.slint";
 import { ChannelItem, GroupItem, ProgrammeInfo, UpcomingItem } from "models.slint";
-import { Sidebar } from "sidebar.slint";
 import { ChannelRow } from "rows.slint";
 import { GroupsColumn } from "groups.slint";
 
@@ -18,7 +17,6 @@ export component LiveTvScreen inherits Rectangle {
     in property <int> channel-index;
     in property <string> group-title;
     in property <string> status;
-    in property <string> view-name;
     in property <image> frame;
     in property <string> video-note;
     in property <ProgrammeInfo> programme;
@@ -28,7 +26,6 @@ export component LiveTvScreen inherits Rectangle {
     callback group-selected(int);
     callback channel-selected(int);
     callback watch();
-    callback switch-clicked();
     callback navigate(int);
     callback next-provider();
     // Rows `first` to `first + count` are on screen, for lazy logos.
@@ -105,27 +102,17 @@ export component LiveTvScreen inherits Rectangle {
         }
     }
     HorizontalLayout {
-        Sidebar {
-            active: 1;
-            navigate(i) => {
-                root.navigate(i);
-            }
-        }
         VerticalLayout {
             HorizontalLayout {
                 vertical-stretch: 1;
                 groups := GroupsColumn {
                     title: "Live TV";
                     status: root.status;
-                    view-name: root.view-name;
                     groups: root.groups;
                     group-index: root.group-index;
                     group-selected(i) => {
                         root.select-group(i);
                         keys.focus();
-                    }
-                    switch-clicked => {
-                        root.switch-clicked();
                     }
                 }
                 // Channels.

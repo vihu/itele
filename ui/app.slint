@@ -1,4 +1,5 @@
-// The itele window: login, Live TV, the guide, search, Movies and Series,
+// The itele window: login, the browse screens (Live TV, the guide, search,
+// Movies and Series, Settings) beside the sidebar and under the top bar,
 // and the fullscreen player.
 
 import "fonts/SchibstedGrotesk.ttf";
@@ -9,14 +10,14 @@ import { ChannelItem, GroupItem, LiveTvScreen, ProgrammeInfo, UpcomingItem } fro
 import { InfoLine, InfoPair, PlayerScreen, PlayerState, TrackItem } from "player.slint";
 import { GuideCell, GuideDetails, GuideRow, GuideScreen, GuideTick } from "guide.slint";
 import { ProviderItem } from "models.slint";
-import { SearchItem, SearchScreen } from "search.slint";
-import { SwitcherPanel } from "popups.slint";
+import { SearchData, SearchItem, SearchScreen } from "search.slint";
 import { Shell } from "sidebar.slint";
+import { Browse } from "browse.slint";
 import { Fact, GuideStatus, ProviderDetails, SettingKey, SettingValues, SettingsData, SettingsScreen } from "settings.slint";
 import { PosterItem, VodScreen } from "vod.slint";
 import { DetailsScreen, EpisodeItem, SeasonItem, TitleDetails } from "details.slint";
 
-export { Shell, ChannelItem, Fact, GroupItem, GuideStatus, SettingKey, SettingValues, SettingsData, ProviderItem, SearchItem, GuideCell, GuideDetails, GuideRow, GuideTick, EpisodeItem, InfoLine, InfoPair, PlayerState, PosterItem, ProgrammeInfo, ProviderDetails, SeasonItem, TitleDetails, TrackItem, UpcomingItem }
+export { Shell, SearchData, ChannelItem, Fact, GroupItem, GuideStatus, SettingKey, SettingValues, SettingsData, ProviderItem, SearchItem, GuideCell, GuideDetails, GuideRow, GuideTick, EpisodeItem, InfoLine, InfoPair, PlayerState, PosterItem, ProgrammeInfo, ProviderDetails, SeasonItem, TitleDetails, TrackItem, UpcomingItem }
 
 export enum Screen { login, live, guide, search, movies, series, details, settings, player }
 
@@ -36,7 +37,6 @@ export component AppWindow inherits Window {
     in property <[ProviderItem]> providers;
     // The provider the groups show; -1 shows every provider.
     in property <int> view-index: -1;
-    in property <string> view-name;
     callback login();
     callback cancel-login();
     callback add-provider();
@@ -78,19 +78,25 @@ export component AppWindow inherits Window {
         guide.reveal(root.guide-row);
     }
 
-    // Search.
-    in-out property <string> search-query;
-    in property <[SearchItem]> search-items;
-    in property <int> search-index: -1;
-    in property <string> search-note;
-    callback search-edited(string);
-    callback search-picked(int);
-    callback search-move(int);
+    // Search (SearchData), typed in the top bar: results drop down under
+    // the field, and fill the Search screen once it shows.
 
     // Scrolls the search results to the selected one.
     public function reveal-search-row() {
-        search.reveal(root.search-index);
+        if (root.screen == Screen.search) {
+            search.reveal(SearchData.index);
+        } else {
+            browse.reveal(SearchData.index);
+        }
     }
+
+    // `/` or Ctrl+K: focuses the search field with the last query selected.
+    public function focus-search() {
+        browse.focus-search(true);
+    }
+
+    // The top bar's clock, for example "21:22".
+    in property <string> clock;
 
     // Movies and Series, which share one screen.
     in property <[GroupItem]> vod-groups;
@@ -172,7 +178,7 @@ export component AppWindow inherits Window {
         } else if (root.screen == Screen.guide) {
             guide.focus-keys();
         } else if (root.screen == Screen.search) {
-            search.focus-field();
+            browse.focus-search(false);
         } else if (root.screen == Screen.movies || root.screen == Screen.series) {
             vod.focus-keys();
         } else if (root.screen == Screen.details) {
@@ -198,6 +204,10 @@ export component AppWindow inherits Window {
     default-font-family: "Schibsted Grotesk";
     default-font-size: Theme.fs-md;
 
+    // The screens beside the sidebar and under the top bar.
+    property <bool> browsing: root.screen != Screen.login && root.screen != Screen.player;
+    property <int> place: root.screen == Screen.live ? 1 : root.screen == Screen.guide ? 2 : root.screen == Screen.movies ? 3 : root.screen == Screen.series ? 4 : root.screen == Screen.details ? root.details-rail : root.screen == Screen.settings ? 6 : -1;
+
     property <ChannelItem> current: root.channel-index >= 0 && root.channel-index < root.channels.length ? root.channels[root.channel-index] : { name: "" };
 
     function next-provider() {
@@ -206,187 +216,194 @@ export component AppWindow inherits Window {
         }
     }
 
-    // Ctrl+B anywhere: whatever a screen does not handle reaches here.
+    // Ctrl+B and Ctrl+, anywhere: whatever a screen does not handle reaches
+    // here.
     shell-keys := FocusScope {
         key-pressed(event) => {
             if (event.modifiers.control && event.text.to-lowercase() == "b") {
                 Shell.toggle-sidebar();
                 return accept;
             }
+            if (event.modifiers.control && event.text == "," && root.browsing) {
+                root.navigate(6);
+                return accept;
+            }
             reject
         }
 
-        live := LiveTvScreen {
-            visible: root.screen == Screen.live;
-            groups: root.groups;
-            group-index: root.group-index;
-            channels: root.channels;
-            channel-index: root.channel-index;
-            group-title: root.group-title;
-            status: root.status;
-            view-name: root.view-name;
-            frame: root.screen == Screen.live ? root.frame : @image-url("");
-            video-note: root.video-note;
-            programme: root.programme;
-            upcoming: root.upcoming;
-            group-selected(i) => {
-                root.group-selected(i);
-            }
-            channel-selected(i) => {
-                root.channel-selected(i);
-            }
-            watch => {
-                root.watch();
-            }
+        browse := Browse {
+            visible: root.browsing;
+            place: root.place;
+            providers: root.providers;
+            view-index: root.view-index;
+            clock: root.clock;
+            searching: root.screen == Screen.search;
             navigate(i) => {
                 root.navigate(i);
             }
-            next-provider => {
-                root.next-provider();
-            }
-            switch-clicked => {
-                switcher.show();
-            }
-            rows-visible(first, count) => {
-                root.rows-visible(first, count);
-            }
-        }
-
-        guide := GuideScreen {
-            visible: root.screen == Screen.guide;
-            rows: root.guide-rows;
-            row-index: root.guide-row;
-            ticks: root.guide-ticks;
-            now-x: root.guide-now-x;
-            day: root.guide-day;
-            details: root.guide-details;
-            frame: root.screen == Screen.guide ? root.frame : @image-url("");
-            video-note: root.video-note;
-            rows-visible(first, count) => {
-                root.guide-rows-visible(first, count);
-            }
-            cell-clicked(row, cell) => {
-                root.guide-cell-clicked(row, cell);
-                guide.focus-keys();
-            }
-            move(dx, dy) => {
-                root.guide-move(dx, dy);
-            }
-            page(direction) => {
-                root.guide-page(direction);
-            }
-            now => {
-                root.guide-now();
-            }
-            enter => {
-                root.guide-enter();
-            }
-            watch => {
-                root.guide-enter();
-            }
-            replay => {
-                root.guide-replay();
-            }
-            earlier => {
-                root.guide-shift(-1);
-            }
-            later => {
-                root.guide-shift(1);
-            }
-            navigate(i) => {
-                root.navigate(i);
-            }
-        }
-
-        search := SearchScreen {
-            visible: root.screen == Screen.search;
-            query <=> root.search-query;
-            items: root.search-items;
-            index: root.search-index;
-            note: root.search-note;
-            edited(text) => {
-                root.search-edited(text);
-            }
-            picked(i) => {
-                root.search-picked(i);
-            }
-            move(delta) => {
-                root.search-move(delta);
-            }
-            navigate(i) => {
-                root.navigate(i);
-            }
-        }
-
-        vod := VodScreen {
-            visible: root.screen == Screen.movies || root.screen == Screen.series;
-            title: root.screen == Screen.series ? "Series" : "Movies";
-            rail-active: root.screen == Screen.series ? 4 : 3;
-            status: root.vod-status;
-            view-name: root.view-name;
-            groups: root.vod-groups;
-            group-index: root.vod-group-index;
-            group-title: root.vod-group-title;
-            items: root.vod-items;
-            index <=> root.vod-index;
-            note: root.vod-note;
-            focus-groups <=> root.vod-focus-groups;
-            group-selected(i) => {
-                root.vod-group-selected(i);
-            }
-            open(i) => {
-                root.vod-open(i);
-            }
-            items-visible(first, count) => {
-                root.vod-items-visible(first, count);
-            }
-            navigate(i) => {
-                root.navigate(i);
-            }
-            next-provider => {
-                root.next-provider();
-            }
-            switch-clicked => {
-                switcher.show();
-            }
-        }
-
-        details-screen := DetailsScreen {
-            visible: root.screen == Screen.details;
-            details: root.details;
-            rail-active: root.details-rail;
-            series: root.details-series;
-            seasons: root.details-seasons;
-            season-index: root.details-season-index;
-            episodes: root.details-episodes;
-            episode-index <=> root.details-episode-index;
-            play => {
-                root.details-play();
-            }
-            restart => {
-                root.details-restart();
-            }
-            season-selected(i) => {
-                root.details-season-selected(i);
-            }
-            back => {
-                root.details-back();
-            }
-            navigate(i) => {
-                root.navigate(i);
-            }
-        }
-
-        settings-screen := SettingsScreen {
-            visible: root.screen == Screen.settings;
-            sign-out(i) => {
-                root.sign-out(i);
+            view-selected(i) => {
+                root.view-selected(i);
             }
             add-provider => {
                 root.add-provider();
             }
-            navigate(i) => {
-                root.navigate(i);
+            escape => {
+                if (root.screen == Screen.search) {
+                    root.navigate(1);
+                } else {
+                    root.focus-screen();
+                }
+            }
+
+            live := LiveTvScreen {
+                visible: root.screen == Screen.live;
+                groups: root.groups;
+                group-index: root.group-index;
+                channels: root.channels;
+                channel-index: root.channel-index;
+                group-title: root.group-title;
+                status: root.status;
+                frame: root.screen == Screen.live ? root.frame : @image-url("");
+                video-note: root.video-note;
+                programme: root.programme;
+                upcoming: root.upcoming;
+                group-selected(i) => {
+                    root.group-selected(i);
+                }
+                channel-selected(i) => {
+                    root.channel-selected(i);
+                }
+                watch => {
+                    root.watch();
+                }
+                navigate(i) => {
+                    root.navigate(i);
+                }
+                next-provider => {
+                    root.next-provider();
+                }
+                rows-visible(first, count) => {
+                    root.rows-visible(first, count);
+                }
+            }
+
+            guide := GuideScreen {
+                visible: root.screen == Screen.guide;
+                rows: root.guide-rows;
+                row-index: root.guide-row;
+                ticks: root.guide-ticks;
+                now-x: root.guide-now-x;
+                day: root.guide-day;
+                details: root.guide-details;
+                frame: root.screen == Screen.guide ? root.frame : @image-url("");
+                video-note: root.video-note;
+                rows-visible(first, count) => {
+                    root.guide-rows-visible(first, count);
+                }
+                cell-clicked(row, cell) => {
+                    root.guide-cell-clicked(row, cell);
+                    guide.focus-keys();
+                }
+                move(dx, dy) => {
+                    root.guide-move(dx, dy);
+                }
+                page(direction) => {
+                    root.guide-page(direction);
+                }
+                now => {
+                    root.guide-now();
+                }
+                enter => {
+                    root.guide-enter();
+                }
+                watch => {
+                    root.guide-enter();
+                }
+                replay => {
+                    root.guide-replay();
+                }
+                earlier => {
+                    root.guide-shift(-1);
+                }
+                later => {
+                    root.guide-shift(1);
+                }
+                navigate(i) => {
+                    root.navigate(i);
+                }
+            }
+
+            search := SearchScreen {
+                visible: root.screen == Screen.search;
+                navigate(i) => {
+                    root.navigate(i);
+                }
+            }
+
+            vod := VodScreen {
+                visible: root.screen == Screen.movies || root.screen == Screen.series;
+                title: root.screen == Screen.series ? "Series" : "Movies";
+                status: root.vod-status;
+                groups: root.vod-groups;
+                group-index: root.vod-group-index;
+                group-title: root.vod-group-title;
+                items: root.vod-items;
+                index <=> root.vod-index;
+                note: root.vod-note;
+                focus-groups <=> root.vod-focus-groups;
+                group-selected(i) => {
+                    root.vod-group-selected(i);
+                }
+                open(i) => {
+                    root.vod-open(i);
+                }
+                items-visible(first, count) => {
+                    root.vod-items-visible(first, count);
+                }
+                navigate(i) => {
+                    root.navigate(i);
+                }
+                next-provider => {
+                    root.next-provider();
+                }
+            }
+
+            details-screen := DetailsScreen {
+                visible: root.screen == Screen.details;
+                details: root.details;
+                series: root.details-series;
+                seasons: root.details-seasons;
+                season-index: root.details-season-index;
+                episodes: root.details-episodes;
+                episode-index <=> root.details-episode-index;
+                play => {
+                    root.details-play();
+                }
+                restart => {
+                    root.details-restart();
+                }
+                season-selected(i) => {
+                    root.details-season-selected(i);
+                }
+                back => {
+                    root.details-back();
+                }
+                navigate(i) => {
+                    root.navigate(i);
+                }
+            }
+
+            settings-screen := SettingsScreen {
+                visible: root.screen == Screen.settings;
+                sign-out(i) => {
+                    root.sign-out(i);
+                }
+                add-provider => {
+                    root.add-provider();
+                }
+                navigate(i) => {
+                    root.navigate(i);
+                }
             }
         }
 
@@ -462,22 +479,6 @@ export component AppWindow inherits Window {
             }
             cancel => {
                 root.cancel-login();
-            }
-        }
-    }
-
-    // Provider switcher, under the groups column's switcher button.
-    switcher := PopupWindow {
-        x: 88px;
-        y: 128px;
-        width: 300px;
-        close-policy: close-on-click-outside;
-        SwitcherPanel {
-            providers: root.providers;
-            view-index: root.view-index;
-            selected(i) => {
-                switcher.close();
-                root.view-selected(i);
             }
         }
     }

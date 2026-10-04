@@ -5,7 +5,6 @@ import { ScrollView } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { Hint } from "atoms.slint";
 import { Fact, GuideStatus, ProviderDetails, SettingKey, SettingValues } from "models.slint";
-import { Sidebar } from "sidebar.slint";
 import { PanelHeader, SectionItem } from "settings-controls.slint";
 import { ProviderBlock } from "settings-providers.slint";
 import { SettingsData } from "settings-data.slint";
@@ -53,12 +52,6 @@ export component SettingsScreen inherits Rectangle {
         }
 
         HorizontalLayout {
-            Sidebar {
-                active: 6;
-                navigate(i) => {
-                    root.navigate(i);
-                }
-            }
             VerticalLayout {
                 HorizontalLayout {
                     vertical-stretch: 1;

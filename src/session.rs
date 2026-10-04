@@ -44,7 +44,7 @@ use crate::logos::Logos;
 use crate::names::thousands;
 use crate::playback::{self, SEEK_STEP, VOLUME_STEP};
 use crate::tracks;
-use crate::ui::{AppWindow, ChannelItem, Screen, SettingsData, Shell};
+use crate::ui::{AppWindow, ChannelItem, Screen, SearchData, SettingsData, Shell};
 
 /// Delay before the preview follows the selection, so holding Down does
 /// not open a stream per row.
@@ -56,6 +56,9 @@ const POLL_INTERVAL: Duration = Duration::from_millis(250);
 /// How often now and next are read again, so progress moves and
 /// programmes roll over.
 const GUIDE_TICK: Duration = Duration::from_secs(30);
+/// How often the top bar's clock is set: often enough to turn with the
+/// minute.
+const CLOCK_TICK: Duration = Duration::from_secs(5);
 
 thread_local! {
     static SESSION: RefCell<Option<Rc<Session>>> = const { RefCell::new(None) };
@@ -88,6 +91,7 @@ pub struct Session {
     guide_timer: Timer,
     search_timer: Timer,
     refresh_timer: Timer,
+    clock_timer: Timer,
 }
 
 #[derive(Default)]
@@ -209,6 +213,7 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
         guide_timer: Timer::default(),
         search_timer: Timer::default(),
         refresh_timer: Timer::default(),
+        clock_timer: Timer::default(),
     });
     SESSION.with(|s| *s.borrow_mut() = Some(Rc::clone(&session)));
 
@@ -250,9 +255,11 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
     app.on_guide_cell_clicked(|row, cell| with_session(|s| s.grid_cell_clicked(row, cell)));
     app.on_guide_enter(|| with_session(|s| s.grid_enter()));
     app.on_guide_replay(|| with_session(|s| s.grid_enter()));
-    app.on_search_edited(|_| with_session(|s| s.search_edited()));
-    app.on_search_picked(|i| with_session(|s| s.search_picked(i)));
-    app.on_search_move(|delta| with_session(|s| s.search_move(delta)));
+    let search = app.global::<SearchData>();
+    search.on_edited(|_| with_session(|s| s.search_edited()));
+    search.on_picked(|i| with_session(|s| s.search_picked(i)));
+    search.on_move(|delta| with_session(|s| s.search_move(delta)));
+    search.on_all(|| with_session(|s| s.open_search()));
     app.on_vod_group_selected(|i| with_session(|s| s.vod_group_selected(i)));
     app.on_vod_items_visible(|first, count| with_session(|s| s.vod_items_visible(first, count)));
     app.on_vod_open(|i| with_session(|s| s.vod_open(i)));
@@ -286,6 +293,12 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
         .guide_timer
         .start(TimerMode::Repeated, GUIDE_TICK, || {
             with_session(|s| s.tick_guide());
+        });
+    session.tick_clock();
+    session
+        .clock_timer
+        .start(TimerMode::Repeated, CLOCK_TICK, || {
+            with_session(|s| s.tick_clock());
         });
     session
         .refresh_timer
@@ -368,7 +381,9 @@ impl Session {
                 .slots
                 .iter()
                 .find(|slot| &slot.provider.id == id)
-                .map_or_else(SharedString::new, |slot| slot.status.as_str().into()),
+                .map_or_else(SharedString::new, |slot| {
+                    format!("{} · {}", slot.status, slot.provider.name).into()
+                }),
             View::All => match state.slots.len() {
                 0 => SharedString::new(),
                 1 => state.slots[0].status.as_str().into(),
@@ -382,13 +397,9 @@ impl Session {
     }
 }
 
-/// For example `1,284 channels · until 12 Jan 2027`.
+/// For example `1,284 channels`.
 fn library_status(library: &Library) -> String {
-    let channels = format!("{} channels", thousands(library.streams.len()));
-    match expiry(&library.account) {
-        Some(date) => format!("{channels} · until {date}"),
-        None => channels,
-    }
+    format!("{} channels", thousands(library.streams.len()))
 }
 
 /// When the account expires, for example `12 Jan 2027`; `None` when it

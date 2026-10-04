@@ -6,7 +6,6 @@ import { ListView } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { Button, ButtonKind, ChannelLogo, Hint, LiveMarker } from "atoms.slint";
 import { GuideCell, GuideDetails, GuideRow, GuideTick } from "models.slint";
-import { Sidebar } from "sidebar.slint";
 
 export { GuideCell, GuideDetails, GuideRow, GuideTick }
 
@@ -164,12 +163,6 @@ export component GuideScreen inherits Rectangle {
         }
     }
     HorizontalLayout {
-        Sidebar {
-            active: 2;
-            navigate(i) => {
-                root.navigate(i);
-            }
-        }
         VerticalLayout {
             // Video and the selected programme.
             Rectangle {

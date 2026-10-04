@@ -39,6 +39,13 @@ const LANGUAGES: [(&str, &str); 14] = [
 ];
 
 impl Session {
+    /// Sets the top bar's clock to the current minute.
+    pub(super) fn tick_clock(&self) {
+        if let Some(app) = self.app.upgrade() {
+            app.set_clock(timefmt::clock(timefmt::now()).into());
+        }
+    }
+
     /// Fills the Settings data that never changes, and applies the saved
     /// preferences; once, at start.
     pub(super) fn apply_preferences(&self) {
@@ -166,6 +173,7 @@ impl Session {
                 timefmt::set_twelve_hour(updated.clock == Clock::Hours12);
                 self.refresh_lists();
                 self.tick_guide();
+                self.tick_clock();
             }
             SettingKey::StartOn => self.remember_screen(Screen::Live),
             SettingKey::Resume => self.refresh_page_history(),

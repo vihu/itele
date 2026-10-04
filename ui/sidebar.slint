@@ -1,12 +1,12 @@
-// The sidebar of the browse screens: expanded with labels, or collapsed to
-// icons by the user (the button at its foot, or Ctrl+B). Layout:
-// .ai-docs/mockups/07-settings.html.
+// The window's sidebar: the places, a button by the wordmark that folds it
+// to icons (or Ctrl+B), and the account chip, which opens the providers and
+// Settings. Layout: .ai-docs/mockups/08-shell.html.
 
 import { Theme } from "theme.slint";
 import { Kbd } from "atoms.slint";
+import { ProviderItem } from "models.slint";
 
-// The sidebar's state, shared by every screen that shows it; the Rust side
-// fills it and remembers the choice.
+// The sidebar's state; the Rust side fills it and remembers the choice.
 export global Shell {
     in property <bool> sidebar-expanded: true;
     // The provider viewed: initials, name, and for example "Until 12 Jan
@@ -21,15 +21,11 @@ component SidebarItem inherits Rectangle {
     in property <image> icon;
     in property <string> text;
     in property <bool> active;
-    // Shown on the right when expanded, for example a key.
-    in property <string> key;
-    // Dimmer than a screen: a control, not a place.
-    in property <bool> quiet;
     callback clicked();
     height: 44px;
     border-radius: Theme.radius-md;
     background: active ? Theme.surface-3 : touch.has-hover ? Theme.surface-2 : transparent;
-    property <color> ink: root.active ? Theme.text : touch.has-hover ? Theme.text : root.quiet ? Theme.text-3 : Theme.text-2;
+    property <color> ink: root.active || touch.has-hover ? Theme.text : Theme.text-2;
     if Shell.sidebar-expanded: HorizontalLayout {
         padding-left: 12px;
         padding-right: 10px;
@@ -52,12 +48,6 @@ component SidebarItem inherits Rectangle {
             horizontal-stretch: 1;
             overflow: elide;
         }
-        if root.key != "": VerticalLayout {
-            alignment: center;
-            Kbd {
-                text: root.key;
-            }
-        }
     }
     if !Shell.sidebar-expanded: Image {
         source: root.icon;
@@ -73,79 +63,213 @@ component SidebarItem inherits Rectangle {
     }
 }
 
+// One row of the account menu: a provider (with its initials), or an
+// action (with an icon).
+component MenuRow inherits Rectangle {
+    in property <image> icon;
+    in property <string> avatar;
+    in property <string> title;
+    in property <string> detail;
+    in property <bool> ticked;
+    in property <string> key;
+    callback clicked();
+    height: 46px;
+    border-radius: Theme.radius-sm;
+    background: touch.has-hover ? Theme.surface-3 : transparent;
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+        spacing: 12px;
+        VerticalLayout {
+            alignment: center;
+            if root.avatar != "": Rectangle {
+                width: 28px;
+                height: 28px;
+                border-radius: 7px;
+                background: Theme.surface-4;
+                Text {
+                    text: root.avatar;
+                    color: Theme.text;
+                    font-size: 11px;
+                    font-weight: 700;
+                }
+            }
+            if root.avatar == "": Image {
+                source: root.icon;
+                width: 20px;
+                height: 20px;
+                colorize: Theme.text-2;
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 1;
+            Text {
+                text: root.title;
+                color: Theme.text;
+                font-size: root.detail != "" ? Theme.fs-sm : Theme.fs-md;
+                font-weight: root.detail != "" ? 600 : 500;
+                overflow: elide;
+            }
+            if root.detail != "": Text {
+                text: root.detail;
+                color: Theme.text-3;
+                font-size: Theme.fs-xs;
+                overflow: elide;
+            }
+        }
+        if root.ticked: VerticalLayout {
+            alignment: center;
+            Image {
+                source: @image-url("icons/check.svg");
+                width: 16px;
+                height: 16px;
+                colorize: Theme.accent;
+            }
+        }
+        if root.key != "": VerticalLayout {
+            alignment: center;
+            Kbd {
+                text: root.key;
+            }
+        }
+    }
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
 export component Sidebar inherits Rectangle {
-    // Index of the highlighted item: 0 home, 1 live TV, 2 guide, 3 movies,
-    // 4 series, 5 search, 6 settings.
+    // The highlighted place: 0 home, 1 live TV, 2 guide, 3 movies, 4
+    // series; 6 (Settings) lights the account chip.
     in property <int> active: 1;
+    in property <[ProviderItem]> providers;
+    // The viewed provider; -1 is every provider.
+    in property <int> view-index;
     callback navigate(int);
+    callback view-selected(int);
+    callback add-provider();
+
+    property <int> menu-rows: root.providers.length + (root.providers.length > 1 ? 1 : 0) + 2;
+
     width: Shell.sidebar-expanded ? 236px : 76px;
     background: Theme.surface-1;
     VerticalLayout {
         padding-top: 22px;
         padding-bottom: 16px;
-        padding-left: Shell.sidebar-expanded ? 14px : 14px;
+        padding-left: 14px;
         padding-right: 14px;
         spacing: 4px;
-        HorizontalLayout {
-            alignment: Shell.sidebar-expanded ? start : center;
-            padding-left: Shell.sidebar-expanded ? 12px : 0px;
+        // The wordmark and the fold button: side by side, or stacked when
+        // folded.
+        if Shell.sidebar-expanded: HorizontalLayout {
+            padding-left: 12px;
+            padding-right: 4px;
             padding-bottom: 22px;
             Text {
-                text: Shell.sidebar-expanded ? "itele" : "i";
+                text: "itele";
                 color: Theme.text;
-                font-size: Shell.sidebar-expanded ? 26px : 22px;
+                font-size: 26px;
                 font-weight: 800;
+                vertical-alignment: center;
             }
             Text {
                 text: ".";
                 color: Theme.accent;
-                font-size: Shell.sidebar-expanded ? 26px : 22px;
+                font-size: 26px;
                 font-weight: 800;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+            }
+            VerticalLayout {
+                alignment: center;
+                Rectangle {
+                width: 32px;
+                height: 32px;
+                border-radius: Theme.radius-sm;
+                background: fold-touch.has-hover ? Theme.surface-2 : transparent;
+                Image {
+                    source: @image-url("icons/panel-close.svg");
+                    width: 20px;
+                    height: 20px;
+                    colorize: fold-touch.has-hover ? Theme.text : Theme.text-3;
+                }
+                fold-touch := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => {
+                        Shell.toggle-sidebar();
+                    }
+                }
+            }
             }
         }
-        for item[i] in [
-            { icon: @image-url("icons/home.svg"), text: "Home" },
-            { icon: @image-url("icons/tv.svg"), text: "Live TV" },
-            { icon: @image-url("icons/guide.svg"), text: "Guide" },
-            { icon: @image-url("icons/film.svg"), text: "Movies" },
-            { icon: @image-url("icons/series.svg"), text: "Series" },
-            { icon: @image-url("icons/search.svg"), text: "Search" },
+        if !Shell.sidebar-expanded: VerticalLayout {
+            padding-bottom: 18px;
+            spacing: 14px;
+            HorizontalLayout {
+                alignment: center;
+                Text {
+                    text: "i";
+                    color: Theme.text;
+                    font-size: 22px;
+                    font-weight: 800;
+                }
+                Text {
+                    text: ".";
+                    color: Theme.accent;
+                    font-size: 22px;
+                    font-weight: 800;
+                }
+            }
+            HorizontalLayout {
+                alignment: center;
+                Rectangle {
+                    width: 32px;
+                    height: 32px;
+                    border-radius: Theme.radius-sm;
+                    background: unfold-touch.has-hover ? Theme.surface-2 : transparent;
+                    Image {
+                        source: @image-url("icons/panel-open.svg");
+                        width: 20px;
+                        height: 20px;
+                        colorize: unfold-touch.has-hover ? Theme.text : Theme.text-3;
+                    }
+                    unfold-touch := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => {
+                            Shell.toggle-sidebar();
+                        }
+                    }
+                }
+            }
+        }
+        for item in [
+            { id: 0, icon: @image-url("icons/home.svg"), text: "Home" },
+            { id: 1, icon: @image-url("icons/tv.svg"), text: "Live TV" },
+            { id: 2, icon: @image-url("icons/guide.svg"), text: "Guide" },
+            { id: 3, icon: @image-url("icons/film.svg"), text: "Movies" },
+            { id: 4, icon: @image-url("icons/series.svg"), text: "Series" },
         ]: SidebarItem {
             icon: item.icon;
             text: item.text;
-            active: i == root.active;
+            active: item.id == root.active;
             clicked => {
-                root.navigate(i);
+                root.navigate(item.id);
             }
         }
         Rectangle {
             vertical-stretch: 1;
         }
-        SidebarItem {
-            icon: @image-url("icons/settings.svg");
-            text: "Settings";
-            active: root.active == 6;
-            clicked => {
-                root.navigate(6);
-            }
-        }
-        SidebarItem {
-            icon: Shell.sidebar-expanded ? @image-url("icons/panel-close.svg") : @image-url("icons/panel-open.svg");
-            text: "Collapse";
-            key: "Ctrl+B";
-            quiet: true;
-            clicked => {
-                Shell.toggle-sidebar();
-            }
-        }
-        Rectangle {
-            height: 4px;
-        }
+        // The account chip: the provider viewed; opens the account menu.
         Rectangle {
             border-radius: Theme.radius-md;
-            background: Shell.sidebar-expanded ? Theme.surface-2 : transparent;
+            background: chip-touch.has-hover || root.active == 6 ? Theme.surface-3 : Shell.sidebar-expanded ? Theme.surface-2 : transparent;
             HorizontalLayout {
-                padding: Shell.sidebar-expanded ? 12px : 0px;
+                padding: Shell.sidebar-expanded ? 10px : 8px;
+                padding-left: Shell.sidebar-expanded ? 12px : 8px;
                 spacing: 12px;
                 alignment: Shell.sidebar-expanded ? start : center;
                 Rectangle {
@@ -175,6 +299,98 @@ export component Sidebar inherits Rectangle {
                         color: Theme.text-3;
                         font-size: Theme.fs-xs;
                         overflow: elide;
+                    }
+                }
+                if Shell.sidebar-expanded: VerticalLayout {
+                    alignment: center;
+                    Image {
+                        source: @image-url("icons/updown.svg");
+                        width: 16px;
+                        height: 16px;
+                        colorize: Theme.text-3;
+                    }
+                }
+            }
+            chip-touch := TouchArea {
+                mouse-cursor: pointer;
+                clicked => {
+                    menu.show();
+                }
+            }
+        }
+    }
+
+    // Watching from: each provider, All providers; Add provider, Settings.
+    menu := PopupWindow {
+        x: Shell.sidebar-expanded ? 14px : 82px;
+        width: Shell.sidebar-expanded ? root.width - 28px : 280px;
+        // Padding, the heading, the rows and the rule.
+        height: 16px + 30px + root.menu-rows * 46px + 13px;
+        y: root.height - (Shell.sidebar-expanded ? 76px : 16px) - self.height;
+        close-policy: close-on-click-outside;
+        Rectangle {
+            background: Theme.surface-2;
+            border-radius: Theme.radius-lg;
+            drop-shadow-blur: 28px;
+            drop-shadow-offset-y: 10px;
+            drop-shadow-color: #00000073;
+            VerticalLayout {
+                padding: 8px;
+                HorizontalLayout {
+                    height: 30px;
+                    padding-left: 10px;
+                    Text {
+                        text: "Watching from";
+                        color: Theme.text-3;
+                        font-size: Theme.fs-xs;
+                        font-weight: 700;
+                        vertical-alignment: center;
+                    }
+                }
+                for provider[i] in root.providers: MenuRow {
+                    avatar: provider.avatar;
+                    title: provider.name;
+                    detail: provider.meta;
+                    ticked: i == root.view-index;
+                    clicked => {
+                        menu.close();
+                        root.view-selected(i);
+                    }
+                }
+                if root.providers.length > 1: MenuRow {
+                    avatar: "ALL";
+                    title: "All providers";
+                    detail: "Every group, tagged";
+                    ticked: root.view-index == -1;
+                    clicked => {
+                        menu.close();
+                        root.view-selected(-1);
+                    }
+                }
+                Rectangle {
+                    height: 13px;
+                    Rectangle {
+                        x: 4px;
+                        width: parent.width - 8px;
+                        height: 1px;
+                        background: Theme.line;
+                    }
+                }
+                MenuRow {
+                    icon: @image-url("icons/plus.svg");
+                    title: "Add provider";
+                    clicked => {
+                        menu.close();
+                        root.add-provider();
+                    }
+                }
+                MenuRow {
+                    icon: @image-url("icons/settings.svg");
+                    title: "Settings";
+                    key: "Ctrl+,";
+                    clicked => {
+                        menu.close();
+                        root.navigate(6);
                     }
                 }
             }
