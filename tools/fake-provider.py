@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Fake Xtream Codes provider for developing itele without a real account.
 
-Serves the player API (account, live categories, live streams), SVG channel
-logos, and local video files as live streams. Login: demo / demo.
+Serves the player API (account, live categories, live streams), an XMLTV
+guide, SVG channel logos, and local video files as live streams. Login:
+demo / demo.
 
     python3 tools/fake-provider.py --media clip1.ts clip2.mp4
 
@@ -18,6 +19,7 @@ import subprocess
 import time
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
+from xml.sax.saxutils import escape, quoteattr
 
 USER, PASSWORD = "demo", "demo"
 
@@ -32,6 +34,14 @@ GROUPS = {
     "United Kingdom": ["Harbour One", "Thames Live", "Highland TV", "Borders Channel"],
     "Deutschland": ["Rheinwelle", "Nordlicht", "Alpenblick HD"],
 }
+TITLES = [
+    "The Meadow Year", "Night Shift: Owls", "Wild Coasts", "Harbour Lights", "The Evening Desk",
+    "World Tonight", "Coastal League Live", "Track Cycling", "Late Mix", "Live at the Arcade",
+    "Engines of the Deep", "Cities After Dark", "Pip and the Paper Boats", "Goodnight Stories",
+    "Les Années Lumière", "Journal de la nuit", "Night Train to Varna", "Short Film Hour",
+    "Rivers of Ice", "The Salt Road", "Morning Wire", "Capital Report", "Ringside", "Paddock Live",
+    "Quiet Streets", "Moss & Pebble", "Tiny Planet", "Highland Walks", "Rheinabend", "Alpenblick",
+]
 COLORS = ["#1f5e3b", "#2a3cc7", "#b3261e", "#0f6e8c", "#3b3f4a", "#c2185b", "#5b6b2e", "#d35400", "#6b5ca5"]
 
 
@@ -71,6 +81,34 @@ def logo_svg(name, color):
     )
 
 
+def xmltv(streams, now):
+    """A guide from three days back to two days ahead, stable per channel."""
+    start = now // 1800 * 1800 - 3 * 86400
+    end = now + 2 * 86400
+
+    def stamp(t):
+        return time.strftime("%Y%m%d%H%M%S +0000", time.gmtime(t))
+
+    out = ['<?xml version="1.0" encoding="UTF-8"?>', '<tv generator-info-name="itele fake provider">']
+    for s in streams:
+        out.append(f'<channel id={quoteattr(s["epg_channel_id"])}><display-name>{escape(s["name"])}</display-name></channel>')
+    for s in streams:
+        rng = random.Random(s["stream_id"] * 7919 + start // 86400)
+        t, episode = start, 1
+        while t < end:
+            duration = rng.choice([30, 45, 60, 60, 90, 120]) * 60
+            title = rng.choice(TITLES)
+            desc = f"Episode {episode}. {title} on {s['name']}, a programme made up for testing itele."
+            out.append(
+                f'<programme start="{stamp(t)}" stop="{stamp(t + duration)}" channel={quoteattr(s["epg_channel_id"])}>'
+                f'<title lang="en">{escape(title)}</title><desc lang="en">{escape(desc)}</desc></programme>'
+            )
+            t += duration
+            episode += 1
+    out.append("</tv>")
+    return "\n".join(out)
+
+
 class Handler(BaseHTTPRequestHandler):
     categories, streams, media, host = [], [], [], ""
 
@@ -106,6 +144,11 @@ class Handler(BaseHTTPRequestHandler):
             if action == "get_live_streams":
                 return self.send(json.dumps(self.streams))
             return self.send("[]")
+        if url.path == "/xmltv.php":
+            q = {k: v[0] for k, v in parse_qs(url.query).items()}
+            if q.get("username") == USER and q.get("password") == PASSWORD:
+                return self.send(xmltv(self.streams, int(time.time())), "application/xml")
+            return self.send_error(401)
         if url.path.startswith("/logo/"):
             sid = int(url.path.split("/")[-1].split(".")[0])
             stream = next((s for s in self.streams if s["stream_id"] == sid), None)

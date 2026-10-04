@@ -7,7 +7,7 @@ use itele::provider::{self, Library, Provider};
 use itele::xtream::{self, Action, Client, Credentials};
 use slint::{Image, ModelRc, SharedString, VecModel};
 
-use super::{Session, Slot, host_of, initials, library_status, on_ui_thread};
+use super::{Session, Slot, guide, host_of, initials, library_status, on_ui_thread};
 use crate::live::{Source, View};
 use crate::ui::{ProviderItem, Screen};
 
@@ -109,6 +109,11 @@ impl Session {
             app.set_frame(Image::default());
             app.set_video_note(SharedString::new());
         }
+        if let Some(store) = self.guide.borrow_mut().as_mut()
+            && let Err(e) = store.remove(&slot.provider.id)
+        {
+            eprintln!("remove guide: {e}");
+        }
         let cleanup = slot
             .provider
             .forget_password()
@@ -164,7 +169,11 @@ impl Session {
                 .map(|slot| ProviderItem {
                     name: slot.provider.name.as_str().into(),
                     user: slot.provider.username.as_str().into(),
-                    status: slot.status.as_str().into(),
+                    status: if slot.guide.is_empty() {
+                        slot.status.as_str().into()
+                    } else {
+                        format!("{} · {}", slot.status, slot.guide).into()
+                    },
                 })
                 .collect();
             let viewed = match state.catalog.view() {
@@ -225,12 +234,14 @@ impl Session {
                 provider: provider.clone(),
                 credentials: None,
                 status,
+                guide: String::new(),
                 epoch,
             });
             epoch
         };
 
         let id = provider.id.clone();
+        let guide_path = self.paths.guide_path();
         thread::spawn(move || {
             let credentials = match provider.credentials() {
                 Ok(credentials) => credentials,
@@ -240,10 +251,16 @@ impl Session {
             let ready_id = id.clone();
             on_ui_thread(move |s| s.credentials_ready(&ready_id, epoch, credentials));
             let result = Library::fetch(&client, &cache);
+            let wanted = result.as_ref().ok().map(guide::wanted_channels);
+            let library_id = id.clone();
             on_ui_thread(move |s| match result {
-                Ok(library) => s.library_ready(&id, epoch, library),
-                Err(e) => s.refresh_failed(&id, epoch, &e),
+                Ok(library) => s.library_ready(&library_id, epoch, library),
+                Err(e) => s.refresh_failed(&library_id, epoch, &e),
             });
+            if let Some(wanted) = wanted {
+                let imported = guide::refresh(&client, &guide_path, &id, &wanted);
+                on_ui_thread(move |s| s.guide_ready(&id, epoch, imported));
+            }
         });
     }
 

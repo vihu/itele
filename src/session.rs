@@ -7,6 +7,7 @@
 //! is ever logged or shown.
 
 mod browse;
+mod guide;
 mod player;
 mod providers;
 
@@ -15,6 +16,7 @@ use std::rc::Rc;
 use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
 
+use itele::epg::Store;
 use itele::provider::{Library, Paths, Provider};
 use itele::xtream::{Credentials, LiveStream};
 use mpv_engine::{EndReason, Engine, PlaybackEvent};
@@ -44,6 +46,9 @@ pub struct Session {
     engine: Arc<Engine>,
     state: RefCell<State>,
     logos: RefCell<Logos>,
+    /// Read side of the guide store; imports write through their own
+    /// connection on a worker thread.
+    guide: RefCell<Option<Store>>,
     select_timer: Timer,
     banner_timer: Timer,
     banner_until: Cell<Instant>,
@@ -69,6 +74,8 @@ struct Slot {
     provider: Provider,
     credentials: Option<Credentials>,
     status: String,
+    /// How the last guide import went; empty before the first one.
+    guide: String,
     /// Results of work started for an earlier slot with the same provider
     /// (signed out since) carry another epoch and are dropped.
     epoch: u64,
@@ -88,12 +95,14 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
     let logos = Logos::start(paths.logos_dir(), |url, path| {
         on_ui_thread(move |s| s.logo_ready(url, path));
     });
+    let guide = Store::open(&paths.guide_path()).ok();
     let session = Rc::new(Session {
         app: app.as_weak(),
         paths,
         engine,
         state: RefCell::default(),
         logos: RefCell::new(logos),
+        guide: RefCell::new(guide),
         select_timer: Timer::default(),
         banner_timer: Timer::default(),
         banner_until: Cell::new(Instant::now()),

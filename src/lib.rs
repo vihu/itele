@@ -6,5 +6,6 @@
 
 #![deny(unsafe_code, missing_docs, rustdoc::broken_intra_doc_links)]
 
+pub mod epg;
 pub mod provider;
 pub mod xtream;

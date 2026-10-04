@@ -19,6 +19,8 @@ pub type Result<T = ()> = std::result::Result<T, Error>;
 
 /// Whole-request timeout: large providers send tens of megabytes of JSON.
 const TIMEOUT: Duration = Duration::from_secs(60);
+/// Whole-download timeout for the XMLTV guide, which can be very large.
+const GUIDE_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 /// Body size cap. ureq's 10 MiB default is too small for big channel lists.
 const MAX_BODY: u64 = 256 * 1024 * 1024;
 /// Sent with every API request; some panels reject an empty user agent.
@@ -247,6 +249,29 @@ impl Client {
             .limit(MAX_BODY)
             .read_to_string()
             .map_err(Error::from_ureq)
+    }
+}
+
+impl Client {
+    /// Opens the provider's XMLTV guide as a stream, for parsing as it
+    /// downloads; guides can run to hundreds of megabytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Status`] for an HTTP error status and
+    /// [`Error::Network`] when no response arrives.
+    pub fn xmltv(&self) -> Result<impl std::io::Read + Send + 'static> {
+        let response = self
+            .agent
+            .get(format!("{}/xmltv.php", self.credentials.server))
+            .query("username", &self.credentials.username)
+            .query("password", &self.credentials.password)
+            .config()
+            .timeout_global(Some(GUIDE_TIMEOUT))
+            .build()
+            .call()
+            .map_err(Error::from_ureq)?;
+        Ok(response.into_body().into_reader())
     }
 }
 

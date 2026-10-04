@@ -162,6 +162,11 @@ impl Paths {
         }
     }
 
+    /// The programme guide store, shared by all providers.
+    pub fn guide_path(&self) -> Utf8PathBuf {
+        self.cache.join("guide.sqlite")
+    }
+
     /// Where downloaded channel logos are kept, shared by all providers.
     pub fn logos_dir(&self) -> Utf8PathBuf {
         self.cache.join("logos")
