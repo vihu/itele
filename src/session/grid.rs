@@ -49,6 +49,7 @@ impl Session {
                 }
             }
             2 => self.open_guide(),
+            5 => self.open_search(),
             _ => {}
         }
     }

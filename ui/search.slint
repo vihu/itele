@@ -1,0 +1,227 @@
+// Search: channels by name and programmes by title, across every provider.
+
+import { ListView } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { ChannelLogo, Hint, LiveMarker } from "atoms.slint";
+import { SearchItem } from "models.slint";
+import { Rail } from "rail.slint";
+
+export { SearchItem }
+
+component ResultRow inherits Rectangle {
+    in property <SearchItem> item;
+    in property <bool> selected;
+    callback clicked();
+    height: 60px;
+    border-radius: Theme.radius-md;
+    background: item.kind == 2 ? transparent : selected ? Theme.surface-2 : touch.has-hover ? Theme.surface-1 : transparent;
+    border-width: selected && item.kind != 2 ? 1px : 0px;
+    border-color: Theme.accent-line;
+    if root.item.kind == 2: Text {
+        x: 12px;
+        y: parent.height - self.height - 6px;
+        text: root.item.title;
+        color: Theme.text-3;
+        font-size: Theme.fs-sm;
+        font-weight: 700;
+    }
+    if root.item.kind != 2: HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 16px;
+        spacing: 16px;
+        VerticalLayout {
+            alignment: center;
+            ChannelLogo {
+                short: root.item.short;
+                tint: root.item.tint;
+                logo: root.item.logo;
+                has-logo: root.item.has-logo;
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+            horizontal-stretch: 1;
+            Text {
+                text: root.item.title;
+                color: Theme.text;
+                font-size: Theme.fs-md;
+                font-weight: 600;
+                overflow: elide;
+            }
+            Text {
+                text: root.item.subtitle;
+                color: Theme.text-3;
+                font-size: Theme.fs-sm;
+                overflow: elide;
+            }
+        }
+        if root.item.live: VerticalLayout {
+            alignment: center;
+            LiveMarker { }
+        }
+        if root.item.replay: VerticalLayout {
+            alignment: center;
+            Image {
+                source: @image-url("icons/catchup.svg");
+                width: 16px;
+                height: 16px;
+                colorize: Theme.text-3;
+            }
+        }
+        Text {
+            max-width: 320px;
+            text: root.item.detail;
+            color: Theme.text-2;
+            font-size: Theme.fs-sm;
+            vertical-alignment: center;
+            horizontal-alignment: right;
+            overflow: elide;
+        }
+    }
+    touch := TouchArea {
+        enabled: root.item.kind != 2;
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+export component SearchScreen inherits Rectangle {
+    in-out property <string> query;
+    in property <[SearchItem]> items;
+    in property <int> index;
+    in property <string> avatar;
+    in property <string> note;
+    callback edited(string);
+    callback picked(int);
+    callback navigate(int);
+    callback settings-clicked();
+
+    // Focuses the field with the last query selected, so typing replaces it.
+    public function focus-field() {
+        field.focus();
+        field.select-all();
+    }
+
+    // Scrolls the results so `row` is visible; every row is 60px.
+    public function reveal(row: int) {
+        if (row <= 1) {
+            list.content-y = 0;
+        } else if ((row + 1) * 60px > -list.content-y + list.visible-height) {
+            list.content-y = -((row + 1) * 60px - list.visible-height);
+        } else if (row * 60px < -list.content-y) {
+            list.content-y = -row * 60px;
+        }
+    }
+
+    background: Theme.bg;
+    HorizontalLayout {
+        Rail {
+            avatar: root.avatar;
+            active: 5;
+            navigate(i) => {
+                root.navigate(i);
+            }
+            settings-clicked => {
+                root.settings-clicked();
+            }
+        }
+        VerticalLayout {
+            padding-left: 48px;
+            padding-right: 48px;
+            padding-top: 32px;
+            spacing: 18px;
+            Text {
+                text: "Search";
+                color: Theme.text;
+                font-size: Theme.fs-3xl;
+                font-weight: 800;
+            }
+            Rectangle {
+                height: 52px;
+                border-radius: Theme.radius-md;
+                background: Theme.surface-2;
+                border-width: field.has-focus ? 2px : 0px;
+                border-color: Theme.accent;
+                HorizontalLayout {
+                    padding-left: 16px;
+                    padding-right: 16px;
+                    spacing: 12px;
+                    VerticalLayout {
+                        alignment: center;
+                        Image {
+                            source: @image-url("icons/search.svg");
+                            width: 20px;
+                            height: 20px;
+                            colorize: Theme.text-3;
+                        }
+                    }
+                    Rectangle {
+                        horizontal-stretch: 1;
+                        if root.query == "": Text {
+                            x: 0;
+                            height: parent.height;
+                            text: "Channels and programmes, across all providers";
+                            color: Theme.text-3;
+                            font-size: Theme.fs-lg;
+                            vertical-alignment: center;
+                        }
+                        field := TextInput {
+                            height: parent.height;
+                            text <=> root.query;
+                            color: Theme.text;
+                            font-size: Theme.fs-lg;
+                            vertical-alignment: center;
+                            selection-background-color: Theme.accent;
+                            selection-foreground-color: Theme.accent-ink;
+                            edited => {
+                                root.edited(self.text);
+                            }
+                        }
+                    }
+                }
+            }
+            if root.note != "": Text {
+                text: root.note;
+                color: Theme.text-3;
+                font-size: Theme.fs-md;
+            }
+            list := ListView {
+                vertical-stretch: 1;
+                for item[i] in root.items: ResultRow {
+                    item: item;
+                    selected: i == root.index;
+                    clicked => {
+                        root.picked(i);
+                    }
+                }
+            }
+            Rectangle {
+                height: 44px;
+                Rectangle {
+                    y: 0;
+                    height: 1px;
+                    background: Theme.line;
+                }
+                HorizontalLayout {
+                    spacing: 22px;
+                    alignment: start;
+                    Hint {
+                        keys: ["↑", "↓"];
+                        label: "Choose";
+                    }
+                    Hint {
+                        keys: ["Enter"];
+                        label: "Watch";
+                    }
+                    Hint {
+                        keys: ["Esc"];
+                        label: "Back";
+                    }
+                }
+            }
+        }
+    }
+}

@@ -90,3 +90,20 @@ export struct ProviderItem {
     user: string,
     status: string,
 }
+
+// A search result: a channel, a programme, or a section heading.
+export struct SearchItem {
+    // 0 channel, 1 programme, 2 heading.
+    kind: int,
+    title: string,
+    subtitle: string,
+    detail: string,
+    short: string,
+    tint: color,
+    logo: image,
+    has-logo: bool,
+    // On now: Enter watches it.
+    live: bool,
+    // Ended and replayable.
+    replay: bool,
+}

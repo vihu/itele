@@ -39,6 +39,16 @@ pub struct Source {
     pub library: Library,
 }
 
+/// A channel found by name.
+pub struct ChannelHit<'a> {
+    /// The channel's provider.
+    pub source: &'a Source,
+    /// The channel.
+    pub stream: &'a LiveStream,
+    /// Its category name, or empty.
+    pub category: &'a str,
+}
+
 /// Which providers the group list shows.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum View {
@@ -200,6 +210,63 @@ impl Catalog {
             .collect()
     }
 
+    /// Channels whose name contains every word of `query`, across all
+    /// providers: names that start with the query first, then names with a
+    /// word that does, then the rest; shorter names first within each.
+    pub fn search_channels(&self, query: &str, limit: usize) -> Vec<ChannelHit<'_>> {
+        let query = query.trim().to_lowercase();
+        let words: Vec<&str> = query.split_whitespace().collect();
+        if words.is_empty() {
+            return Vec::new();
+        }
+        let mut hits: Vec<(u8, usize, ChannelHit<'_>)> = Vec::new();
+        for source in &self.sources {
+            for stream in &source.library.streams {
+                let name = stream.name.to_lowercase();
+                if !words.iter().all(|w| name.contains(w)) {
+                    continue;
+                }
+                let rank = if name.starts_with(&query) {
+                    0
+                } else if name.split_whitespace().any(|w| w.starts_with(words[0])) {
+                    1
+                } else {
+                    2
+                };
+                let category = stream
+                    .category_id
+                    .as_ref()
+                    .and_then(|id| source.library.categories.iter().find(|c| &c.id == id))
+                    .map_or("", |c| c.name.as_str());
+                hits.push((
+                    rank,
+                    name.len(),
+                    ChannelHit {
+                        source,
+                        stream,
+                        category,
+                    },
+                ));
+            }
+        }
+        hits.sort_by_key(|(rank, len, _)| (*rank, *len));
+        hits.into_iter()
+            .take(limit)
+            .map(|(_, _, hit)| hit)
+            .collect()
+    }
+
+    /// The first channel of `provider` with XMLTV id `guide_id`.
+    pub fn by_guide_id(&self, provider: &str, guide_id: &str) -> Option<(&Source, &LiveStream)> {
+        let source = self.sources.iter().find(|s| s.id == provider)?;
+        let stream = source.library.streams.iter().find(|s| {
+            s.epg_channel_id
+                .as_deref()
+                .is_some_and(|id| id.eq_ignore_ascii_case(guide_id))
+        })?;
+        Some((source, stream))
+    }
+
     /// The row of a provider's channel in `group`, if the group lists it.
     pub fn row_of(&self, group: usize, provider: &str, stream: StreamId) -> Option<usize> {
         let g = self.groups.get(group)?;
@@ -286,7 +353,7 @@ fn channel_item(source: &Source, stream: &LiveStream, row: usize, provider: &str
 /// The first word of `name` that says something, upper-cased and cut to
 /// fit a logo tile. Skips a provider's country prefix (`UK: Sky Sports`,
 /// `FR | TF1`) and one-letter words.
-fn short_name(name: &str) -> String {
+pub fn short_name(name: &str) -> String {
     let name = match name.split_once([':', '|']) {
         Some((prefix, rest)) if prefix.trim().len() <= PREFIX_MAX && !rest.trim().is_empty() => {
             rest
@@ -309,7 +376,7 @@ fn short_name(name: &str) -> String {
 }
 
 /// A stable tile colour for `name`.
-fn tint(name: &str) -> Color {
+pub fn tint(name: &str) -> Color {
     // FNV-1a: stable across runs, unlike the std hasher.
     let hash = name.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |h, b| {
         (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
@@ -459,6 +526,53 @@ mod tests {
         let ids: Vec<_> = catalog.sources().iter().map(|s| s.id.as_str()).collect();
         assert_eq!(ids, ["north", "south"]);
         assert_eq!(catalog.total_channels(), 2);
+    }
+
+    #[test]
+    fn search_ranks_prefixes_then_word_starts() {
+        let mut catalog = Catalog::default();
+        catalog.upsert(source(
+            "north",
+            r#"[{"name":"Sports Extra","stream_id":1},{"name":"Volt Sports 1","stream_id":2},
+                {"name":"Esports Arena","stream_id":3},{"name":"Meridian News","stream_id":4}]"#,
+        ));
+        catalog.upsert(source("south", r#"[{"name":"SPORTS","stream_id":1}]"#));
+        let names: Vec<_> = catalog
+            .search_channels("sports", 10)
+            .iter()
+            .map(|h| (h.source.id.as_str(), h.stream.name.as_str()))
+            .collect();
+        assert_eq!(
+            names,
+            [
+                ("south", "SPORTS"),
+                ("north", "Sports Extra"),
+                ("north", "Volt Sports 1"),
+                ("north", "Esports Arena")
+            ]
+        );
+        assert_eq!(
+            catalog.search_channels("volt 1", 10).len(),
+            1,
+            "every word must match"
+        );
+        assert!(catalog.search_channels("  ", 10).is_empty());
+        assert_eq!(catalog.search_channels("s", 2).len(), 2, "limit");
+    }
+
+    #[test]
+    fn by_guide_id_ignores_case() {
+        let mut catalog = Catalog::default();
+        catalog.upsert(source(
+            "north",
+            r#"[{"name":"One","stream_id":7,"epg_channel_id":"One.UK"}]"#,
+        ));
+        assert_eq!(
+            catalog.by_guide_id("north", "one.uk").unwrap().1.id,
+            StreamId(7)
+        );
+        assert!(catalog.by_guide_id("south", "one.uk").is_none());
+        assert!(catalog.by_guide_id("north", "two.uk").is_none());
     }
 
     #[test]

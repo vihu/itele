@@ -11,6 +11,7 @@ mod grid;
 mod guide;
 mod player;
 mod providers;
+mod search;
 mod timefmt;
 
 use std::cell::{Cell, RefCell};
@@ -59,6 +60,7 @@ pub struct Session {
     banner_until: Cell<Instant>,
     poll_timer: Timer,
     guide_timer: Timer,
+    search_timer: Timer,
 }
 
 #[derive(Default)]
@@ -79,6 +81,7 @@ struct State {
     /// Rows the channel list last reported on screen.
     visible: std::ops::Range<usize>,
     grid: grid::Grid,
+    search: search::Search,
     playing: Option<Playing>,
     /// Source of [`Slot::epoch`] values.
     next_epoch: u64,
@@ -123,6 +126,7 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
         banner_until: Cell::new(Instant::now()),
         poll_timer: Timer::default(),
         guide_timer: Timer::default(),
+        search_timer: Timer::default(),
     });
     SESSION.with(|s| *s.borrow_mut() = Some(Rc::clone(&session)));
 
@@ -161,6 +165,9 @@ pub fn start(app: &AppWindow, engine: Arc<Engine>, paths: Paths) {
     app.on_guide_shift(|direction| with_session(|s| s.grid_shift(direction)));
     app.on_guide_cell_clicked(|row, cell| with_session(|s| s.grid_cell_clicked(row, cell)));
     app.on_guide_enter(|| with_session(|s| s.grid_enter()));
+    app.on_search_edited(|_| with_session(|s| s.search_edited()));
+    app.on_search_picked(|i| with_session(|s| s.search_picked(i)));
+    app.on_search_move(|delta| with_session(|s| s.search_move(delta)));
     app.on_cycle_audio(|| with_session(|s| playback::next_audio(&s.engine)));
     app.on_cycle_subtitles(|| with_session(|s| playback::next_subtitles(&s.engine)));
 
