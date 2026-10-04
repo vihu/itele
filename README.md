@@ -10,6 +10,8 @@ starts fast and stays light.
 
 ## Demo
 
+https://github.com/user-attachments/assets/d2d3318b-a0cc-4c6a-bd8d-10470cae1132
+
 ## Design
 
 - libmpv does all demuxing, decoding and audio, so every codec and container
