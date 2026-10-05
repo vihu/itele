@@ -62,7 +62,7 @@ jobs:
       - run: cargo check --workspace --all-targets --locked
 
   licenses:
-    name: Licences
+    name: Licenses
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
