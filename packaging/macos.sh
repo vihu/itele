@@ -22,7 +22,7 @@ id=io.github.vihu.itele
 version=$(sed -n 's/^version *= *"\(.*\)"/\1/p' Cargo.toml)
 
 build() {
-  local arch work app iconset size
+  local arch work app iconset size file
   arch=$(uname -m)
   export MACOSX_DEPLOYMENT_TARGET=11.0
   cargo build --profile dist --locked
@@ -36,6 +36,19 @@ build() {
     -d "$app/Contents/Frameworks/" \
     -p @executable_path/../Frameworks/ \
     -s "$(brew --prefix)/lib"
+
+  # dylibbundler points every rpath it rewrites at Frameworks, so a library
+  # that had several (Homebrew's libmpv has two) ends up with the same one
+  # more than once, which dyld on macOS 26 refuses to load. Keep one of each.
+  for file in "$app/Contents/MacOS/itele" "$app/Contents/Frameworks/"*.dylib; do
+    otool -l "$file" | awk '/cmd LC_RPATH/ {getline; getline; print $2}' | sort | uniq -c |
+      while read -r count rpath; do
+        while [ "$count" -gt 1 ]; do
+          install_name_tool -delete_rpath "$rpath" "$file"
+          count=$((count - 1))
+        done
+      done
+  done
 
   iconset=$work/itele.iconset
   mkdir "$iconset"
