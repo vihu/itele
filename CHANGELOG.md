@@ -1,6 +1,12 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## 0.1.1 (2026-10-05)
+
+- macOS: the app opens again. The bundled libmpv named the same library
+  path twice, which macOS 26 refuses to load ("itele cannot be opened
+  because of a problem").
+
+## 0.1.0 (2026-10-04)
 
 The first release: a native IPTV player for Xtream Codes providers, for
 Linux and macOS.
