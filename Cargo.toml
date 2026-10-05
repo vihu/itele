@@ -5,7 +5,7 @@ license      = "GPL-3.0-or-later"
 name         = "itele"
 publish      = false
 rust-version = "1.93"
-version      = "0.1.0"
+version      = "0.1.1"
 
 [workspace]
 members = ["ui"]

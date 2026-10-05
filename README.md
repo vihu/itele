@@ -28,7 +28,7 @@ https://github.com/user-attachments/assets/d2d3318b-a0cc-4c6a-bd8d-10470cae1132
 - Passwords live in the system keychain (Secret Service on Linux, Keychain
   on macOS), never in a file or a log.
 
-Status: 0.1.0, not released yet (changes in `CHANGELOG.md`). Targets Linux
+Status: 0.1.1 (changes in `CHANGELOG.md`). Targets Linux
 (Wayland) and macOS. itele brings no channels of its own: it plays what
 your provider offers.
 
